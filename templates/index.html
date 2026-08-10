@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}YouTube Search{% endblock %}
+{% block content %}
+  <h1>Search YouTube</h1>
+  <form method="get" action="{{ url_for('search') }}" class="search-form">
+    <input type="text" name="q" placeholder="Search YouTube..." value="{{ query or '' }}" required>
+    <button type="submit">Search</button>
+  </form>
+
+  {% if data %}
+    {% if not data.available %}
+      <p class="unavailable">{{ data.reason }}</p>
+
+    {% elif not data.results %}
+      <p class="unavailable">No results for "{{ query }}".</p>
+
+    {% else %}
+      <div class="yt-grid">
+        {% for video in data.results %}
+          <div class="yt-card" data-embed-url="{{ video.embed_url }}">
+            <div class="yt-thumb-wrap" onclick="playInline(this)">
+              <img src="{{ video.thumbnail }}" alt="{{ video.title }}" class="yt-thumb">
+              {% if video.duration %}<span class="yt-duration">{{ video.duration }}</span>{% endif %}
+              <span class="yt-play-overlay">▶</span>
+            </div>
+
+            <div class="yt-meta-row">
+              {% if video.channel_avatar %}
+                <a href="{{ video.channel_url }}" target="_blank" rel="noopener">
+                  <img src="{{ video.channel_avatar }}" alt="{{ video.channel_title }}" class="yt-avatar">
+                </a>
+              {% endif %}
+              <div class="yt-text">
+                <a href="{{ video.watch_url }}" target="_blank" rel="noopener" class="yt-title">{{ video.title }}</a>
+                <a href="{{ video.channel_url }}" target="_blank" rel="noopener" class="yt-channel">{{ video.channel_title }}</a>
+                <p class="yt-stats">
+                  {% if video.view_count %}{{ video.view_count }} views{% endif %}
+                  {% if video.view_count and video.published_ago %} • {% endif %}
+                  {{ video.published_ago }}
+                </p>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endif %}
+
+  <script>
+    // Clicking a thumbnail swaps it for a live YouTube embed, played inline —
+    // exactly like clicking a result on youtube.com itself. Only one video
+    // plays at a time; switching to another stops the previous one.
+    function playInline(thumbWrap) {
+      document.querySelectorAll('.yt-thumb-wrap').forEach(function (el) {
+        if (el !== thumbWrap) el.innerHTML = el.dataset.originalHtml || el.innerHTML;
+      });
+
+      const card = thumbWrap.closest('.yt-card');
+      const embedUrl = card.dataset.embedUrl;
+
+      if (!thumbWrap.dataset.originalHtml) {
+        thumbWrap.dataset.originalHtml = thumbWrap.innerHTML;
+      }
+
+      const iframe = document.createElement('iframe');
+      iframe.src = embedUrl;
+      iframe.width = '100%';
+      iframe.height = '202';
+      iframe.frameBorder = '0';
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allowFullscreen = true;
+      iframe.style.borderRadius = '10px';
+
+      thumbWrap.innerHTML = '';
+      thumbWrap.appendChild(iframe);
+      thumbWrap.onclick = null;
+    }
+  </script>
+{% endblock %}

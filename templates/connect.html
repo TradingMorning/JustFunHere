@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Connect Accounts{% endblock %}
+{% block content %}
+  <h1>Connect your accounts</h1>
+  <p class="hint">You're redirected to each platform's own official login page. This app never sees your password — only the permissions you approve.</p>
+
+  <div class="connect-grid">
+    {% for platform in platforms %}
+      <div class="connect-card">
+        <h3>{{ platform.name }}</h3>
+        {% if platform.id in connected %}
+          <p class="connected-badge">✅ Connected</p>
+          <a href="{{ url_for('disconnect', platform=platform.id) }}" class="btn-secondary">Disconnect</a>
+        {% else %}
+          <a href="{{ platform.connect_url }}" class="btn-primary">Connect {{ platform.name }}</a>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  <section class="telegram-widget">
+    <h3>Telegram</h3>
+    {% if 'telegram' in connected %}
+      <p class="connected-badge">✅ Connected</p>
+    {% else %}
+      <script async src="https://telegram.org/js/telegram-widget.js?22"
+        data-telegram-login="{{ telegram_bot_username }}"
+        data-size="large"
+        data-auth-url="{{ url_for('connect_telegram_callback', _external=True) }}"
+        data-request-access="write"></script>
+    {% endif %}
+  </section>
+{% endblock %}

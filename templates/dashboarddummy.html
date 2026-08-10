@@ -1,0 +1,303 @@
+
+<!-- 
+
+
+ {% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+  <h1>Your Dashboard</h1>
+
+  {% if not connected %}
+    <p>No accounts connected yet. <a href="{{ url_for('connect') }}">Connect one</a> to get started.</p>
+  {% endif %}
+
+  <section class="platform-section">
+    <h2>Full report</h2>
+    <p class="hint">Every video you've uploaded, and the exact status of each platform it was posted to.</p>
+
+    {% if not report %}
+      <p class="unavailable">No videos uploaded yet.</p>
+    {% endif %}
+
+    {% for entry in report %}
+      <div class="card" style="margin-bottom:16px;">
+        <p><strong>{{ entry.video.filename }}</strong> — {{ entry.video.status }}</p>
+        <p class="meta">Uploaded: {{ entry.video.uploaded_at }}</p>
+        <a href="{{ entry.video.storage_url }}" target="_blank" rel="noopener">View source file</a>
+
+        <table style="width:100%; margin-top:10px; border-collapse: collapse;">
+          <tr style="text-align:left; border-bottom:1px solid #e5e5e5;">
+            <th>Platform</th><th>Status</th><th>Posted at</th><th>Result</th><th>Error</th>
+          </tr>
+          {% for post in entry.posts %}
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td>{{ post.platform | capitalize }}</td>
+            <td>
+              {% if post.status == 'posted' %}✅{% elif post.status == 'failed' %}❌{% else %}⏳{% endif %}
+              {{ post.status }}
+            </td>
+            <td>{{ post.posted_at or '—' }}</td>
+            <td>{% if post.platform_post_url %}<a href="{{ post.platform_post_url }}" target="_blank" rel="noopener">View post</a>{% else %}—{% endif %}</td>
+            <td class="unavailable">{{ post.error_message or '' }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    {% endfor %}
+  </section>
+
+  {% if connected %}
+    <section class="platform-section">
+      <div class="tabs">
+        <button type="button" class="tab-btn active" onclick="showTab('single')">Single Video</button>
+        <button type="button" class="tab-btn" onclick="showTab('bulk')">Bulk Upload</button>
+      </div>
+
+      <div id="single-tab" class="tab-content">
+        <h2>Upload new content</h2>
+        <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="upload-form">
+          <label>Video file</label>
+          <input type="file" name="video_file" accept="video/*" required>
+
+          <label>Title</label>
+          <input type="text" name="title" placeholder="Title">
+
+          <label>Caption / description</label>
+          <textarea name="caption" placeholder="Caption for this post..."></textarea>
+
+          <label>Post to:</label>
+          <div class="checkbox-row">
+            {% for platform in connected %}
+              {% if platform in ['youtube', 'facebook', 'instagram', 'x', 'pinterest', 'tiktok'] %}
+                <label><input type="checkbox" name="platforms" value="{{ platform }}"> {{ platform | capitalize }}</label>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <button type="submit" class="btn-primary">Upload</button>
+        </form>
+      </div>
+
+      <div id="bulk-tab" class="tab-content" style="display:none;">
+        <h2>Bulk upload — schedule multiple videos</h2>
+        <input type="file" id="bulkFileInput" accept="video/*" multiple>
+        <div id="bulkMetadataForms"></div>
+        <label>Post to:</label>
+        <div class="checkbox-row" id="bulkPlatforms">
+          {% for platform in connected %}
+            {% if platform in ['youtube', 'facebook', 'tiktok'] %}
+              <label><input type="checkbox" name="platforms" value="{{ platform }}"> {{ platform | capitalize }}</label>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <label>Gap between posts (hours)</label>
+        <input type="number" id="gapHours" value="24" min="0.1" step="0.1">
+        
+
+        <button type="button" class="btn-primary" onclick="submitBulkUpload()">Queue all for scheduled posting</button>
+
+        <div id="bulkProgressWrap" style="display:none; margin-top:15px;">
+        <div style="background:#eee; border-radius:6px; overflow:hidden; height:20px;">
+        <div id="bulkProgressBar" style="background:#4caf50; height:100%; width:0%; transition:width 0.2s;"></div>
+        </div>
+        <p id="bulkProgressText" style="margin-top:6px; font-size:14px;"></p>
+        </div>
+      </div>
+    </section>
+
+    <script>
+    function showTab(tab) {
+      document.getElementById('single-tab').style.display = tab === 'single' ? 'block' : 'none';
+      document.getElementById('bulk-tab').style.display = tab === 'bulk' ? 'block' : 'none';
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+
+    document.getElementById('bulkFileInput').addEventListener('change', function(e) {
+      const container = document.getElementById('bulkMetadataForms');
+      container.innerHTML = '';
+      Array.from(e.target.files).forEach((file, i) => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.style.marginBottom = '10px';
+        div.innerHTML = `
+          <p><strong>${file.name}</strong></p>
+          <input type="text" placeholder="Title for this video" data-index="${i}" class="bulk-title">
+          <textarea placeholder="Caption for this video" data-index="${i}" class="bulk-caption"></textarea>
+        `;
+        container.appendChild(div);
+      });
+    });
+
+
+    function submitBulkUpload() {
+  const files = document.getElementById('bulkFileInput').files;
+  if (!files.length) { alert('Choose at least one video.'); return; }
+
+  const btn = event.target;
+  btn.disabled = true;
+
+  const formData = new FormData();
+  const titles = document.querySelectorAll('.bulk-title');
+  const captions = document.querySelectorAll('.bulk-caption');
+  let totalSize = 0;
+
+  for (let i = 0; i < files.length; i++) {
+    formData.append('video_files', files[i]);
+    formData.append('titles', titles[i].value || files[i].name);
+    formData.append('captions', captions[i].value || '');
+    totalSize += files[i].size;
+  }
+  document.querySelectorAll('#bulkPlatforms input:checked').forEach(cb => formData.append('platforms', cb.value));
+  formData.append('gap_hours', document.getElementById('gapHours').value);
+
+  const wrap = document.getElementById('bulkProgressWrap');
+  const bar = document.getElementById('bulkProgressBar');
+  const text = document.getElementById('bulkProgressText');
+  wrap.style.display = 'block';
+
+  const totalMB = (totalSize / (1024 * 1024)).toFixed(1);
+  const startTime = Date.now();
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', "{{ url_for('bulk_upload') }}");
+
+  xhr.upload.addEventListener('progress', function(e) {
+    if (!e.lengthComputable) return;
+    const percent = Math.round((e.loaded / e.total) * 100);
+    const uploadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+    const elapsedSec = (Date.now() - startTime) / 1000;
+    const speedMBps = elapsedSec > 0 ? (uploadedMB / elapsedSec).toFixed(2) : '0.00';
+
+    bar.style.width = percent + '%';
+    text.textContent = `${percent}% — ${uploadedMB} MB / ${totalMB} MB — ${speedMBps} MB/s`;
+  });
+
+  xhr.onload = function() {
+    let data = {};
+    try { data = JSON.parse(xhr.responseText); } catch (err) {}
+    text.textContent = 'Done!';
+    alert(data.message || data.error || 'Done');
+    window.location.reload();
+  };
+
+  xhr.onerror = function() {
+    text.textContent = 'Upload failed.';
+    alert('Upload failed. Please check your connection and try again.');
+    btn.disabled = false;
+  };
+
+  xhr.send(formData);
+}
+
+    // async function submitBulkUpload() {
+    //   const files = document.getElementById('bulkFileInput').files;
+    //   if (!files.length) { alert('Choose at least one video.'); return; }
+    //   const formData = new FormData();
+    //   const titles = document.querySelectorAll('.bulk-title');
+    //   const captions = document.querySelectorAll('.bulk-caption');
+
+    //   for (let i = 0; i < files.length; i++) {
+    //     formData.append('video_files', files[i]);
+    //     formData.append('titles', titles[i].value || files[i].name);
+    //     formData.append('captions', captions[i].value || '');
+    //   }
+    //   document.querySelectorAll('#bulkPlatforms input:checked').forEach(cb => formData.append('platforms', cb.value));
+    //   formData.append('gap_hours', document.getElementById('gapHours').value);
+
+    //   const resp = await fetch("{{ url_for('bulk_upload') }}", { method: 'POST', body: formData });
+    //   const data = await resp.json();
+    //   alert(data.message || data.error || 'Done');
+    //   window.location.reload();
+    // }
+    </script>
+  {% endif %}
+{% endblock %}
+
+
+
+  -->
+
+
+
+
+
+
+
+
+
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+  <h1>Your Dashboard</h1>
+
+  {% if not connected %}
+    <p>No accounts connected yet. <a href="{{ url_for('connect') }}">Connect one</a> to get started.</p>
+  {% endif %}
+
+  <section class="platform-section">
+    <h2>Full report</h2>
+    <p class="hint">Every video you've uploaded, and the exact status of each platform it was posted to.</p>
+
+    {% if not report %}
+      <p class="unavailable">No videos uploaded yet.</p>
+    {% endif %}
+
+    {% for entry in report %}
+      <div class="card" style="margin-bottom:16px;">
+        <p><strong>{{ entry.video.filename }}</strong> — {{ entry.video.status }}</p>
+        <p class="meta">Uploaded: {{ entry.video.uploaded_at }}</p>
+        <a href="{{ entry.video.storage_url }}" target="_blank" rel="noopener">View source file</a>
+
+        <table style="width:100%; margin-top:10px; border-collapse: collapse;">
+          <tr style="text-align:left; border-bottom:1px solid #e5e5e5;">
+            <th>Platform</th><th>Status</th><th>Posted at</th><th>Result</th><th>Error</th>
+          </tr>
+          {% for post in entry.posts %}
+          <tr style="border-bottom:1px solid #f0f0f0;">
+            <td>{{ post.platform | capitalize }}</td>
+            <td>
+              {% if post.status == 'posted' %}✅{% elif post.status == 'failed' %}❌{% else %}⏳{% endif %}
+              {{ post.status }}
+            </td>
+            <td>{{ post.posted_at or '—' }}</td>
+            <td>{% if post.platform_post_url %}<a href="{{ post.platform_post_url }}" target="_blank" rel="noopener">View post</a>{% else %}—{% endif %}</td>
+            <td class="unavailable">{{ post.error_message or '' }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+    {% endfor %}
+  </section>
+
+  {% if connected %}
+    <section class="platform-section">
+      <h2>Upload new content</h2>
+      <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="upload-form">
+        <label>Video file</label>
+        <input type="file" name="video_file" accept="video/*" required>
+
+        <label>Title</label>
+        <input type="text" name="title" placeholder="Title">
+
+        <label>Caption / description</label>
+        <textarea name="caption" placeholder="Caption for this post..."></textarea>
+
+        <label>Post to:</label>
+        <div class="checkbox-row">
+          {% for platform in connected %}
+            {% if platform in ['youtube', 'facebook', 'instagram', 'x', 'pinterest', 'tiktok'] %}
+              <label><input type="checkbox" name="platforms" value="{{ platform }}"> {{ platform | capitalize }}</label>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <button type="submit" class="btn-primary">Upload</button>
+      </form>
+    </section>
+  {% endif %}
+{% endblock %}
+
+
+
+

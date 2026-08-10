@@ -1,0 +1,627 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+
+.pv-page {
+  /* ---- default theme: Amber Ink ---- */
+  --ink: #101114;
+  --surface: #1A1C21;
+  --surface-2: #20232A;
+  --border: #2A2D35;
+  --text: #EDEDEF;
+  --text-dim: #9A9DA6;
+  --accent: #F2A93B;
+  --accent-dim: #7A5A22;
+  --accent-text: #1A1206;
+  --ok: #3DD68C;
+  --fail: #FF6259;
+  --pending: #6FA8DC;
+
+  font-family: 'Inter', sans-serif;
+  color: var(--text);
+  background: var(--ink);
+  padding: 28px 32px 60px;
+  border-radius: 16px;
+}
+
+/* ================= THEMES ================= */
+.pv-page[data-theme="violet-mid"] {
+  --ink:#121022; --surface:#1B1830; --surface-2:#221E3C; --border:#332C54;
+  --text:#ECEAF7; --text-dim:#A79FC9; --accent:#9B7BFF; --accent-dim:#4B3A87; --accent-text:#150E2E;
+  --ok:#4BDBA0; --fail:#FF7A85; --pending:#7FB6FF;
+}
+.pv-page[data-theme="forest-studio"] {
+  --ink:#0E1712; --surface:#16211A; --surface-2:#1C2A21; --border:#2A3A2F;
+  --text:#E7F2EA; --text-dim:#93AE9D; --accent:#4ADE9C; --accent-dim:#1F6E4A; --accent-text:#062015;
+  --ok:#8CF5C8; --fail:#FF7A6E; --pending:#7FC8E8;
+}
+.pv-page[data-theme="crimson-reel"] {
+  --ink:#160D0D; --surface:#221313; --surface-2:#2B1717; --border:#3D1F1F;
+  --text:#F5E9E9; --text-dim:#C29A9A; --accent:#FF5C5C; --accent-dim:#7A2626; --accent-text:#200808;
+  --ok:#4FDB93; --fail:#FFA24C; --pending:#7FB6FF;
+}
+.pv-page[data-theme="ocean-deck"] {
+  --ink:#0B141C; --surface:#111E29; --surface-2:#162736; --border:#213A4C;
+  --text:#E6F1F8; --text-dim:#8FB0C4; --accent:#33C1E0; --accent-dim:#175E70; --accent-text:#031A21;
+  --ok:#3DD68C; --fail:#FF6259; --pending:#7FA8FF;
+}
+.pv-page[data-theme="sunset-editor"] {
+  --ink:#1B1220; --surface:#271A2E; --surface-2:#31213C; --border:#452B4F;
+  --text:#F7ECF2; --text-dim:#C29CB8; --accent:#FF7A59; --accent-dim:#8A3B26; --accent-text:#1F0B04;
+  --ok:#4ADE9C; --fail:#FF5C7A; --pending:#8FB8FF;
+}
+.pv-page[data-theme="paper-light"] {
+  --ink:#FAF7F2; --surface:#FFFFFF; --surface-2:#F1ECE3; --border:#E2DACB;
+  --text:#231F1A; --text-dim:#6B6459; --accent:#C5602D; --accent-dim:#E9C9AE; --accent-text:#FFF8F0;
+  --ok:#1E9E62; --fail:#D8433A; --pending:#2E6FB3;
+}
+.pv-page[data-theme="arctic-light"] {
+  --ink:#F5F7FA; --surface:#FFFFFF; --surface-2:#EAEEF3; --border:#D7DEE7;
+  --text:#1B222C; --text-dim:#5C6B7A; --accent:#2E6FE0; --accent-dim:#C7D8F7; --accent-text:#FFFFFF;
+  --ok:#1F9D66; --fail:#D8423B; --pending:#5B7FBF;
+}
+.pv-page[data-theme="mono-slate"] {
+  --ink:#121212; --surface:#1B1B1B; --surface-2:#232323; --border:#333333;
+  --text:#F2F2F2; --text-dim:#9C9C9C; --accent:#E7E7E7; --accent-dim:#5A5A5A; --accent-text:#101010;
+  --ok:#4FDB93; --fail:#FF6259; --pending:#7FA8E0;
+}
+.pv-page[data-theme="neon-studio"] {
+  --ink:#0A0A12; --surface:#14141F; --surface-2:#1B1B2B; --border:#2C2C42;
+  --text:#F0F0FF; --text-dim:#9A9AC2; --accent:#FF2ED1; --accent-dim:#7A1568; --accent-text:#1A0016;
+  --ok:#38F2C0; --fail:#FF4D6D; --pending:#4DD2FF;
+}
+.pv-page[data-theme="rose-quartz"] {
+  --ink:#1A1116; --surface:#251820; --surface-2:#2F1E28; --border:#442A38;
+  --text:#F7ECF0; --text-dim:#C9A2B2; --accent:#FF6FA5; --accent-dim:#8A3A5C; --accent-text:#210A15;
+  --ok:#4ADE9C; --fail:#FF6259; --pending:#8FB8FF;
+}
+
+.pv-page, .pv-card, .pv-table, .pv-tabs, .pv-form input, .pv-form textarea,
+.pv-select, .pv-chip, .pv-btn-primary, .pv-status, .pv-connect-note, .pv-empty,
+.pv-theme-select {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+.pv-page h1, .pv-page h2 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+
+.pv-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.pv-header-left { display: flex; align-items: center; gap: 10px; }
+.pv-header h1 { font-size: 26px; }
+
+.pv-lamp {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
+  animation: pv-pulse 2.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@media (prefers-reduced-motion: reduce) { .pv-lamp { animation: none; } }
+@keyframes pv-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.pv-theme-switch {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pv-theme-switch label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.pv-theme-select {
+  max-width: 170px;
+  font-size: 13px;
+  padding: 8px 32px 8px 12px;
+}
+
+.pv-connect-note {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+.pv-connect-note a { color: var(--accent); text-decoration: none; }
+.pv-connect-note a:hover { text-decoration: underline; }
+
+.pv-section { margin-bottom: 36px; }
+.pv-hint { color: var(--text-dim); font-size: 14px; margin: 0 0 18px; }
+.pv-empty {
+  color: var(--text-dim);
+  font-size: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+
+/* ---- Report cards ---- */
+.pv-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-dim);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+.pv-card-title { font-size: 15px; font-weight: 600; margin: 0 0 2px; word-break: break-word; }
+.pv-card-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0 0 10px;
+}
+.pv-source-link { font-size: 13px; color: var(--accent); text-decoration: none; }
+.pv-source-link:hover { text-decoration: underline; }
+
+.pv-table-scroll { width: 100%; overflow-x: auto; }
+.pv-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  margin-top: 14px;
+  font-size: 13.5px;
+}
+.pv-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.pv-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.pv-table tr:last-child td { border-bottom: none; }
+.pv-table a { color: var(--accent); text-decoration: none; }
+.pv-table a:hover { text-decoration: underline; }
+.pv-error-cell { color: var(--fail); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+
+.pv-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--text-dim) 14%, transparent);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.pv-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pv-status.is-posted { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.pv-status.is-failed { background: color-mix(in srgb, var(--fail) 16%, transparent); color: var(--fail); }
+.pv-status.is-pending { background: color-mix(in srgb, var(--pending) 16%, transparent); color: var(--pending); }
+
+/* ---- Tabs ---- */
+.pv-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 20px;
+  gap: 4px;
+}
+.pv-tab-btn {
+  font-family: 'Inter', sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pv-tab-btn:hover { color: var(--text); }
+.pv-tab-btn.active { background: var(--accent); color: var(--accent-text); }
+
+/* ---- Forms ---- */
+.pv-form { display: flex; flex-direction: column; gap: 14px; max-width: 560px; width: 100%; box-sizing: border-box; }
+.pv-form label { font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: -8px; }
+.pv-form input[type="text"],
+.pv-form input[type="file"],
+.pv-form input[type="number"],
+.pv-form textarea,
+.pv-select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  padding: 10px 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.pv-form textarea { min-height: 70px; resize: vertical; }
+.pv-form input:focus, .pv-form textarea:focus, .pv-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.pv-checkbox-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pv-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.pv-chip:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.pv-chip input { accent-color: var(--accent); }
+
+.pv-btn-primary {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: 8px;
+  padding: 11px 22px;
+  cursor: pointer;
+  width: fit-content;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+.pv-btn-primary:hover { filter: brightness(1.08); }
+.pv-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pv-bulk-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.pv-bulk-item p { margin: 0 0 8px; font-size: 13.5px; font-weight: 600; word-break: break-word; }
+.pv-bulk-item input, .pv-bulk-item textarea {
+  background: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13.5px;
+  padding: 8px 10px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+}
+
+.pv-select {
+  appearance: none;
+  cursor: pointer;
+  max-width: 240px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%239A9DA6' stroke-width='2' fill='none' fill-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+.pv-progress-wrap { max-width: 560px; width: 100%; box-sizing: border-box; margin-top: 16px; }
+.pv-progress-track {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  height: 10px;
+}
+.pv-progress-bar { background: var(--accent); height: 100%; width: 0%; transition: width 0.2s ease; }
+.pv-progress-text { font-family: 'IBM Plex Mono', monospace; font-size: 12.5px; color: var(--text-dim); margin-top: 8px; }
+
+/* ================= RESPONSIVE ================= */
+@media (max-width: 640px) {
+  .pv-page { padding: 20px 16px 40px; border-radius: 12px; }
+  .pv-header h1 { font-size: 21px; }
+  .pv-theme-switch { margin-left: 0; width: 100%; justify-content: space-between; }
+  .pv-theme-select { max-width: none; flex: 1; }
+  .pv-tabs { width: 100%; }
+  .pv-tab-btn { flex: 1; text-align: center; }
+  .pv-table { min-width: 480px; font-size: 12.5px; }
+}
+</style>
+
+<div class="pv-page" data-theme="amber-ink" id="pvPage">
+
+  <div class="pv-header">
+    <div class="pv-header-left">
+      <span class="pv-lamp"></span>
+      <h1>Your Dashboard</h1>
+    </div>
+    <div class="pv-theme-switch">
+      <label for="themeSelect">Theme</label>
+      <select id="themeSelect" class="pv-select pv-theme-select">
+        <option value="amber-ink">Amber Ink</option>
+        <option value="violet-mid">Midnight Violet</option>
+        <option value="forest-studio">Forest Studio</option>
+        <option value="crimson-reel">Crimson Reel</option>
+        <option value="ocean-deck">Ocean Deck</option>
+        <option value="sunset-editor">Sunset Editor</option>
+        <option value="rose-quartz">Rose Quartz</option>
+        <option value="mono-slate">Mono Slate</option>
+        <option value="neon-studio">Neon Studio</option>
+        <option value="paper-light">Paper Light</option>
+        <option value="arctic-light">Arctic Light</option>
+      </select>
+    </div>
+  </div>
+
+  {% if not connected %}
+    <p class="pv-connect-note">No accounts connected yet. <a href="{{ url_for('connect') }}">Connect one</a> to get started.</p>
+  {% endif %}
+
+  <section class="pv-section">
+    <h2>Full report</h2>
+    <p class="pv-hint">Every video you've uploaded, and the exact status of each platform it was posted to.</p>
+
+    {% if not report %}
+      <p class="pv-empty">No videos uploaded yet.</p>
+    {% endif %}
+
+    {% for entry in report %}
+      <div class="pv-card">
+        <p class="pv-card-title">{{ entry.video.filename }}</p>
+        <p class="pv-card-meta">Status: {{ entry.video.status }} · Uploaded {{ entry.video.uploaded_at }}</p>
+        <a class="pv-source-link" href="{{ entry.video.storage_url }}" target="_blank" rel="noopener">View source file →</a>
+
+        <div class="pv-table-scroll">
+          <table class="pv-table">
+            <tr>
+              <th>Platform</th><th>Status</th><th>Posted at</th><th>Result</th><th>Error</th>
+            </tr>
+            {% for post in entry.posts %}
+            <tr>
+              <td>{{ post.platform | capitalize }}</td>
+              <td>
+                <span class="pv-status {% if post.status == 'posted' %}is-posted{% elif post.status == 'failed' %}is-failed{% else %}is-pending{% endif %}">
+                  {{ post.status }}
+                </span>
+              </td>
+              <td>{{ post.posted_at or '—' }}</td>
+              <td>{% if post.platform_post_url %}<a href="{{ post.platform_post_url }}" target="_blank" rel="noopener">View post →</a>{% else %}—{% endif %}</td>
+              <td class="pv-error-cell">{{ post.error_message or '' }}</td>
+            </tr>
+            {% endfor %}
+          </table>
+        </div>
+      </div>
+    {% endfor %}
+  </section>
+
+  {% if connected %}
+    <section class="pv-section">
+      <section class="platform-section">
+      <h2>Paste a YouTube URL</h2>
+      <p class="hint">Bas URL daalo — clips khud ban ke, khud R2 pe upload ho ke, khud schedule ho jayenge.</p>
+      <form method="post" action="{{ url_for('submit_url_route') }}">
+        <input type="text" name="url" placeholder="https://youtube.com/watch?v=..." style="width:70%">
+        <button type="submit" class="btn-primary">Process</button>
+      </form>
+    </section>
+      <div class="pv-tabs">
+        <button type="button" class="pv-tab-btn active" onclick="showTab('single')">Single Video</button>
+        <button type="button" class="pv-tab-btn" onclick="showTab('bulk')">Bulk Upload</button>
+      </div>
+
+      <div id="single-tab" class="tab-content">
+        <h2>Upload new content</h2>
+        <form method="post" action="{{ url_for('upload') }}" enctype="multipart/form-data" class="pv-form">
+          <label>Video file</label>
+          <input type="file" name="video_file" accept="video/*" required>
+
+          <label>Title</label>
+          <input type="text" name="title" placeholder="Title">
+
+          <label>Caption / description</label>
+          <textarea name="caption" placeholder="Caption for this post..."></textarea>
+
+          <label>Post to</label>
+          <div class="pv-checkbox-row">
+            {% for platform in connected %}
+              {% if platform in ['youtube', 'facebook', 'instagram', 'x', 'pinterest', 'tiktok'] %}
+                <label class="pv-chip"><input type="checkbox" name="platforms" value="{{ platform }}"> {{ platform | capitalize }}</label>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <button type="submit" class="pv-btn-primary">Upload</button>
+        </form>
+      </div>
+
+      <div id="bulk-tab" class="tab-content" style="display:none;">
+        <h2>Bulk upload — schedule multiple videos</h2>
+        <div class="pv-form">
+          <label>Video files</label>
+          <input type="file" id="bulkFileInput" accept="video/*" multiple>
+
+          <div id="bulkMetadataForms"></div>
+
+          <label>Post to</label>
+          <div class="pv-checkbox-row" id="bulkPlatforms">
+            {% for platform in connected %}
+              {% if platform in ['youtube', 'facebook', 'tiktok'] %}
+                <label class="pv-chip"><input type="checkbox" name="platforms" value="{{ platform }}"> {{ platform | capitalize }}</label>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <label for="gapSelect">Gap between posts</label>
+          <select id="gapSelect" class="pv-select">
+            <optgroup label="Minutes">
+              <option value="0.0833">5 minutes</option>
+              <option value="0.1667">10 minutes</option>
+              <option value="0.25">15 minutes</option>
+              <option value="0.5">30 minutes</option>
+            </optgroup>
+            <optgroup label="Hours">
+              <option value="1">1 hour</option>
+              <option value="2">2 hours</option>
+              <option value="3">3 hours</option>
+              <option value="4">4 hours</option>
+              <option value="6">6 hours</option>
+              <option value="8">8 hours</option>
+              <option value="12">12 hours</option>
+              <option value="24" selected>24 hours</option>
+            </optgroup>
+          </select>
+
+          <button type="button" class="pv-btn-primary" onclick="submitBulkUpload()">Queue all for scheduled posting</button>
+
+          <div id="bulkProgressWrap" class="pv-progress-wrap" style="display:none;">
+            <div class="pv-progress-track">
+              <div id="bulkProgressBar" class="pv-progress-bar"></div>
+            </div>
+            <p id="bulkProgressText" class="pv-progress-text"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <script>
+    function showTab(tab) {
+      document.getElementById('single-tab').style.display = tab === 'single' ? 'block' : 'none';
+      document.getElementById('bulk-tab').style.display = tab === 'bulk' ? 'block' : 'none';
+      document.querySelectorAll('.pv-tab-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+
+    document.getElementById('bulkFileInput').addEventListener('change', function(e) {
+      const container = document.getElementById('bulkMetadataForms');
+      container.innerHTML = '';
+      Array.from(e.target.files).forEach((file, i) => {
+        const div = document.createElement('div');
+        div.className = 'pv-bulk-item';
+        div.innerHTML = `
+          <p>${file.name}</p>
+          <input type="text" placeholder="Title for this video" data-index="${i}" class="bulk-title">
+          <textarea placeholder="Caption for this video" data-index="${i}" class="bulk-caption"></textarea>
+        `;
+        container.appendChild(div);
+      });
+    });
+
+    function submitBulkUpload() {
+      const files = document.getElementById('bulkFileInput').files;
+      if (!files.length) { alert('Choose at least one video.'); return; }
+
+      const btn = event.target;
+      btn.disabled = true;
+
+      const formData = new FormData();
+      const titles = document.querySelectorAll('.bulk-title');
+      const captions = document.querySelectorAll('.bulk-caption');
+      let totalSize = 0;
+
+      for (let i = 0; i < files.length; i++) {
+        formData.append('video_files', files[i]);
+        formData.append('titles', titles[i].value || files[i].name);
+        formData.append('captions', captions[i].value || '');
+        totalSize += files[i].size;
+      }
+      document.querySelectorAll('#bulkPlatforms input:checked').forEach(cb => formData.append('platforms', cb.value));
+      formData.append('gap_hours', document.getElementById('gapSelect').value);
+
+      const wrap = document.getElementById('bulkProgressWrap');
+      const bar = document.getElementById('bulkProgressBar');
+      const text = document.getElementById('bulkProgressText');
+      wrap.style.display = 'block';
+
+      const totalMB = (totalSize / (1024 * 1024)).toFixed(1);
+      const startTime = Date.now();
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', "{{ url_for('bulk_upload') }}");
+
+      xhr.upload.addEventListener('progress', function(e) {
+        if (!e.lengthComputable) return;
+        const percent = Math.round((e.loaded / e.total) * 100);
+        const uploadedMB = (e.loaded / (1024 * 1024)).toFixed(1);
+        const elapsedSec = (Date.now() - startTime) / 1000;
+        const speedMBps = elapsedSec > 0 ? (uploadedMB / elapsedSec).toFixed(2) : '0.00';
+
+        bar.style.width = percent + '%';
+        text.textContent = `${percent}% — ${uploadedMB} MB / ${totalMB} MB — ${speedMBps} MB/s`;
+      });
+
+      xhr.onload = function() {
+        let data = {};
+        try { data = JSON.parse(xhr.responseText); } catch (err) {}
+        text.textContent = 'Done!';
+        alert(data.message || data.error || 'Done');
+        window.location.reload();
+      };
+
+      xhr.onerror = function() {
+        text.textContent = 'Upload failed.';
+        alert('Upload failed. Please check your connection and try again.');
+        btn.disabled = false;
+      };
+
+      xhr.send(formData);
+    }
+    </script>
+  {% endif %}
+
+</div>
+
+<script>
+(function() {
+  const THEME_KEY = 'pv_dashboard_theme';
+  const pageEl = document.getElementById('pvPage');
+  const select = document.getElementById('themeSelect');
+
+  let saved = 'amber-ink';
+  try { saved = localStorage.getItem(THEME_KEY) || 'amber-ink'; } catch (e) {}
+
+  pageEl.setAttribute('data-theme', saved);
+  select.value = saved;
+
+  select.addEventListener('change', function() {
+    pageEl.setAttribute('data-theme', this.value);
+    try { localStorage.setItem(THEME_KEY, this.value); } catch (e) {}
+  });
+})();
+</script>
+
+{% endblock %}

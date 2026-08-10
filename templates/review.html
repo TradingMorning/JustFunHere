@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Review Studio{% endblock %}
+{% block content %}
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap');
+
+.rv-page {
+  --ink: #101114;
+  --surface: #1A1C21;
+  --surface-2: #20232A;
+  --border: #2A2D35;
+  --text: #EDEDEF;
+  --text-dim: #9A9DA6;
+  --accent: #F2A93B;
+  --accent-dim: #7A5A22;
+  --accent-text: #1A1206;
+  --ok: #3DD68C;
+  --fail: #FF6259;
+
+  font-family: 'Inter', sans-serif;
+  color: var(--text);
+  background: var(--ink);
+  padding: 28px 32px 60px;
+  border-radius: 16px;
+}
+.rv-page h1, .rv-page h2 { font-family: 'Space Grotesk', sans-serif; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; }
+
+.rv-header { margin-bottom: 10px; }
+.rv-header h1 { font-size: 26px; }
+.rv-hint { color: var(--text-dim); font-size: 14px; margin: 0 0 28px; }
+
+.rv-empty {
+  color: var(--text-dim);
+  font-size: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.rv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 20px;
+}
+
+.rv-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.rv-video-wrap {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  background: #000;
+  max-height: 480px;
+}
+.rv-video-wrap video { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+
+.rv-card-body { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+.rv-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rv-source-title {
+  font-size: 13px;
+  color: var(--text-dim);
+  word-break: break-word;
+  margin: 0;
+}
+.rv-duration {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  padding: 2px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rv-form { display: flex; flex-direction: column; gap: 10px; }
+.rv-form label { font-size: 12px; font-weight: 600; color: var(--text-dim); margin-bottom: -4px; }
+.rv-form input[type="text"], .rv-form textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 13.5px;
+  padding: 8px 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.rv-form textarea { min-height: 54px; resize: vertical; }
+.rv-form input:focus, .rv-form textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.rv-checkbox-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.rv-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.rv-chip:has(input:checked) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.rv-chip input { accent-color: var(--accent); }
+
+.rv-actions { display: flex; gap: 8px; margin-top: 2px; }
+.rv-btn {
+  flex: 1;
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 10px;
+  cursor: pointer;
+  transition: filter 0.15s ease, opacity 0.15s ease;
+}
+.rv-btn-approve { background: var(--ok); color: #062015; }
+.rv-btn-approve:hover { filter: brightness(1.08); }
+.rv-btn-discard { background: transparent; color: var(--fail); border: 1px solid var(--fail); }
+.rv-btn-discard:hover { background: color-mix(in srgb, var(--fail) 12%, transparent); }
+
+@media (max-width: 640px) {
+  .rv-page { padding: 20px 16px 40px; border-radius: 12px; }
+  .rv-header h1 { font-size: 21px; }
+  .rv-grid { grid-template-columns: 1fr; }
+}
+</style>
+
+<div class="rv-page">
+  <div class="rv-header">
+    <h1>Review Studio</h1>
+  </div>
+  <p class="rv-hint">
+    Clips exported from the render pipeline land here first. Watch each one, edit its
+    title/caption/platforms if needed, then <strong>Approve &amp; Queue</strong> to send it to
+    storage and the posting schedule — or <strong>Discard</strong> if it's not worth posting.
+    Nothing reaches storage or YouTube until you approve it here.
+  </p>
+
+  {% if not pending_clips %}
+    <p class="rv-empty">No clips waiting for review right now.</p>
+  {% else %}
+    <div class="rv-grid">
+      {% for clip in pending_clips %}
+        <div class="rv-card">
+          <div class="rv-video-wrap">
+            <video src="{{ clip.preview_url }}" controls preload="metadata" playsinline muted></video>
+          </div>
+          <div class="rv-card-body">
+            <div class="rv-meta-row">
+              <p class="rv-source-title">From: {{ clip.source_title }}</p>
+              {% if clip.duration %}
+                <span class="rv-duration">{{ (clip.duration // 60)|int }}:{{ '%02d' % (clip.duration % 60) }}</span>
+              {% endif %}
+            </div>
+
+            <form class="rv-form" method="post">
+              <label>Title</label>
+              <input type="text" name="title" placeholder="{{ clip.source_title }}">
+
+              <label>Caption / description</label>
+              <textarea name="caption" placeholder="Caption for this post...">{{ clip.source_description }}{% if clip.source_hashtags %}
+
+{{ clip.source_hashtags | join(' ') }}{% endif %}</textarea>
+
+              <label>Post to</label>
+              <div class="rv-checkbox-row">
+                {% for platform in connected %}
+                  {% if platform in ['youtube', 'facebook', 'tiktok'] %}
+                    <label class="rv-chip"><input type="checkbox" name="platforms" value="{{ platform }}"> {{ platform | capitalize }}</label>
+                  {% endif %}
+                {% endfor %}
+              </div>
+
+              <div class="rv-actions">
+                <button type="submit" class="rv-btn rv-btn-approve"
+                        formaction="{{ url_for('review_approve', pending_clip_id=clip._id) }}">
+                  ✅ Approve &amp; Queue
+                </button>
+                <button type="submit" class="rv-btn rv-btn-discard"
+                        formaction="{{ url_for('review_discard', pending_clip_id=clip._id) }}"
+                        formnovalidate
+                        onclick="return confirm('Discard this clip? This cannot be undone.');">
+                  🗑️ Discard
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}
