@@ -50,11 +50,11 @@ import db
 app = Flask(__name__)
 app.secret_key = Config.SECRET_KEY
 
-from RenderDetectHome import init_render
-init_render(app)
+#from RenderDetectHome import init_render
+#init_render(app)
 
-from hook_detector2 import init_hooks
-init_hooks(app)
+#from hook_detector2 import init_hooks
+#init_hooks(app)
 
 from services.scheduler import start_scheduler
 _scheduler =start_scheduler()
