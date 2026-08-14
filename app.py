@@ -48,6 +48,8 @@ from services import search_service, oauth_service, content_service, upload_serv
 import db
 
 app = Flask(__name__)
+app.jinja_env.globals['config'] = Config
+
 app.secret_key = Config.SECRET_KEY
 
 #from RenderDetectHome import init_render
