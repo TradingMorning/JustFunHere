@@ -40,6 +40,10 @@ class Config:
 
     RENDER_SERVICE_URL = os.getenv("RENDER_SERVICE_URL", "http://localhost:5000")
 
+    APP_NAME = os.getenv("APP_NAME", "Falcon Spido")
+    SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "santomani5750@gmail.com")
+    LEGAL_LAST_UPDATED = os.getenv("LEGAL_LAST_UPDATED", "14 August 2026")
+
     # GEMINI_API_KEYS = os.getenv("AQ.Ab8RN6IQSmyub6dyT3gUb5GaeU2_ERDaM0eZW-A64Yd-mROsbg",
     # "AQ.Ab8RN6LaUL4o0weWHLQ9F6cW__Ko_qEZLNX1PGJk-VuquywNmQ",
     # "AQ.Ab8RN6ISugABRVrHSOaniSVy8TT3wl1uwzaESmiijtn8aSo_aw").split(",")
