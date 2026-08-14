@@ -1,79 +1,143 @@
 {% extends "base.html" %}
-{% block title %}YouTube Search{% endblock %}
+{% block title %}Falcon Spido — Post everywhere, from one place{% endblock %}
 {% block content %}
-  <h1>Search YouTube</h1>
-  <form method="get" action="{{ url_for('search') }}" class="search-form">
-    <input type="text" name="q" placeholder="Search YouTube..." value="{{ query or '' }}" required>
-    <button type="submit">Search</button>
-  </form>
 
-  {% if data %}
-    {% if not data.available %}
-      <p class="unavailable">{{ data.reason }}</p>
+<section class="hero">
+  <p class="eyebrow">🦅 One dashboard · Six platforms</p>
+  <h1>Upload once.<br>Publish everywhere.</h1>
+  <p class="hero-sub">
+    Falcon Spido connects your YouTube, Facebook, Instagram, X, TikTok, and
+    Telegram accounts in one place, so you can upload a video once, schedule
+    it for later (or publish instantly), and see exactly what went out where —
+    without logging into six different apps.
+  </p>
+  <div class="hero-actions">
+    <a href="{{ url_for('connect') }}" class="btn-primary btn-lg">Connect your accounts</a>
+    <a href="#how-it-works" class="btn-secondary btn-lg">See how it works</a>
+  </div>
+</section>
 
-    {% elif not data.results %}
-      <p class="unavailable">No results for "{{ query }}".</p>
+<section class="section" id="what-is-it">
+  <p class="eyebrow">What is it</p>
+  <h2>A single dashboard for every platform you post to</h2>
+  <p class="section-lead">
+    If you make video content, you already know the tax: export a clip,
+    open YouTube, upload, write a title. Switch tabs. Open Instagram, upload
+    again, re-crop, re-caption. Repeat for Facebook, X, TikTok, Telegram.
+    Falcon Spido removes the repeat — connect each account once, and every
+    upload after that can go out to all of them from a single screen.
+  </p>
+</section>
 
-    {% else %}
-      <div class="yt-grid">
-        {% for video in data.results %}
-          <div class="yt-card" data-embed-url="{{ video.embed_url }}">
-            <div class="yt-thumb-wrap" onclick="playInline(this)">
-              <img src="{{ video.thumbnail }}" alt="{{ video.title }}" class="yt-thumb">
-              {% if video.duration %}<span class="yt-duration">{{ video.duration }}</span>{% endif %}
-              <span class="yt-play-overlay">▶</span>
-            </div>
+<section class="section" id="how-it-works">
+  <p class="eyebrow">How it works</p>
+  <h2>Four steps, start to finish</h2>
+  <div class="steps-grid">
+    <div class="step-card">
+      <span class="step-icon">🔗</span>
+      <span class="step-num">01</span>
+      <h3>Connect your accounts</h3>
+      <p>You're redirected to each platform's own official login — Google,
+        Meta, X, TikTok, Telegram. We never see your password, only the
+        specific permissions you approve.</p>
+    </div>
+    <div class="step-card">
+      <span class="step-icon">📤</span>
+      <span class="step-num">02</span>
+      <h3>Upload your content</h3>
+      <p>Add your video, thumbnail, title, caption, and hashtags once, in
+        one form.</p>
+    </div>
+    <div class="step-card">
+      <span class="step-icon">🗓️</span>
+      <span class="step-num">03</span>
+      <h3>Publish now, or schedule it</h3>
+      <p>Send it live immediately, or pick a date and time — Falcon Spido
+        publishes it automatically when the moment comes.</p>
+    </div>
+    <div class="step-card">
+      <span class="step-icon">📊</span>
+      <span class="step-num">04</span>
+      <h3>See what happened</h3>
+      <p>Your dashboard shows every post's real status — live and linked,
+        still scheduled, or the exact reason it failed.</p>
+    </div>
+  </div>
+</section>
 
-            <div class="yt-meta-row">
-              {% if video.channel_avatar %}
-                <a href="{{ video.channel_url }}" target="_blank" rel="noopener">
-                  <img src="{{ video.channel_avatar }}" alt="{{ video.channel_title }}" class="yt-avatar">
-                </a>
-              {% endif %}
-              <div class="yt-text">
-                <a href="{{ video.watch_url }}" target="_blank" rel="noopener" class="yt-title">{{ video.title }}</a>
-                <a href="{{ video.channel_url }}" target="_blank" rel="noopener" class="yt-channel">{{ video.channel_title }}</a>
-                <p class="yt-stats">
-                  {% if video.view_count %}{{ video.view_count }} views{% endif %}
-                  {% if video.view_count and video.published_ago %} • {% endif %}
-                  {{ video.published_ago }}
-                </p>
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-  {% endif %}
+<section class="section" id="platforms">
+  <p class="eyebrow">Where you can publish</p>
+  <h2>Six platforms, one login flow each</h2>
+  <div class="platform-grid">
+    <div class="platform-card"><span class="platform-icon">📺</span><h3>YouTube</h3><p>Upload videos straight to your channel.</p></div>
+    <div class="platform-card"><span class="platform-icon">📘</span><h3>Facebook</h3><p>Post to any Page you manage.</p></div>
+    <div class="platform-card"><span class="platform-icon">📸</span><h3>Instagram</h3><p>Publish to a connected Business or Creator account.</p></div>
+    <div class="platform-card"><span class="platform-icon">✖️</span><h3>X (Twitter)</h3><p>Post directly to your timeline.</p></div>
+    <div class="platform-card"><span class="platform-icon">🎵</span><h3>TikTok</h3><p>Upload to your TikTok profile.</p></div>
+    <div class="platform-card"><span class="platform-icon">✈️</span><h3>Telegram</h3><p>Share to your channel or account.</p></div>
+  </div>
+</section>
 
-  <script>
-    // Clicking a thumbnail swaps it for a live YouTube embed, played inline —
-    // exactly like clicking a result on youtube.com itself. Only one video
-    // plays at a time; switching to another stops the previous one.
-    function playInline(thumbWrap) {
-      document.querySelectorAll('.yt-thumb-wrap').forEach(function (el) {
-        if (el !== thumbWrap) el.innerHTML = el.dataset.originalHtml || el.innerHTML;
-      });
+<section class="section" id="why">
+  <p class="eyebrow">Why creators use it</p>
+  <h2>Built around control, not lock-in</h2>
+  <div class="features-grid">
+    <div class="feature-row"><span class="feature-icon">⏱️</span><div><h3>Save hours every week</h3><p>Stop uploading the same video six separate times through six separate apps.</p></div></div>
+    <div class="feature-row"><span class="feature-icon">🔒</span><div><h3>Your accounts stay yours</h3><p>Tokens are encrypted at rest, and you can disconnect any platform in one click, any time.</p></div></div>
+    <div class="feature-row"><span class="feature-icon">🎯</span><div><h3>Nothing posts without you</h3><p>Every publish is something you explicitly uploaded and selected — no auto-generated content, ever.</p></div></div>
+    <div class="feature-row"><span class="feature-icon">🧭</span><div><h3>One place to see everything</h3><p>Every scheduled and published post across every platform, in a single timeline.</p></div></div>
+  </div>
+</section>
 
-      const card = thumbWrap.closest('.yt-card');
-      const embedUrl = card.dataset.embedUrl;
+<section class="section" id="faq">
+  <p class="eyebrow">FAQ</p>
+  <h2>Common questions</h2>
+  <div class="faq-list">
+    <details class="faq-item">
+      <summary>What exactly is Falcon Spido?</summary>
+      <p>A tool that lets you connect your own social media accounts and
+        upload, schedule, or publish your own video content to them —
+        YouTube, Facebook, Instagram, X, TikTok, and Telegram — from one
+        dashboard, instead of doing it manually on each app.</p>
+    </details>
+    <details class="faq-item">
+      <summary>Who is this for?</summary>
+      <p>Creators, small teams, and agencies who publish the same video
+        content across more than one platform and want to stop doing it
+        manually, one app at a time.</p>
+    </details>
+    <details class="faq-item">
+      <summary>Is my data and are my accounts safe?</summary>
+      <p>Yes. We connect to each platform using their own official login —
+        we never see or store your platform passwords. Access tokens are
+        encrypted at rest. Full details are in our
+        <a href="{{ url_for('privacy_policy') }}">Privacy Policy</a>.</p>
+    </details>
+    <details class="faq-item">
+      <summary>Can I disconnect a platform or delete my data?</summary>
+      <p>Yes, any time, in one click — see
+        <a href="{{ url_for('data_deletion') }}">Data Deletion Instructions</a>
+        for every way to do it.</p>
+    </details>
+    <details class="faq-item">
+      <summary>Do I need a Business account for Instagram?</summary>
+      <p>Yes — Instagram's own API requires the account be a Business or
+        Creator account linked to a Facebook Page. Personal Instagram
+        accounts can't be connected, due to Instagram's own platform rules.</p>
+    </details>
+    <details class="faq-item">
+      <summary>What happens if a scheduled post fails?</summary>
+      <p>It never fails silently — your dashboard shows the exact reason
+        (for example, a platform-side content rule, a missing permission,
+        or a temporary outage on that platform's end), so you always know
+        what happened.</p>
+    </details>
+  </div>
+</section>
 
-      if (!thumbWrap.dataset.originalHtml) {
-        thumbWrap.dataset.originalHtml = thumbWrap.innerHTML;
-      }
+<section class="section cta-section">
+  <h2>Ready to post everywhere, at once?</h2>
+  <a href="{{ url_for('connect') }}" class="btn-primary btn-lg">Connect your accounts</a>
+</section>
 
-      const iframe = document.createElement('iframe');
-      iframe.src = embedUrl;
-      iframe.width = '100%';
-      iframe.height = '202';
-      iframe.frameBorder = '0';
-      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
-      iframe.allowFullscreen = true;
-      iframe.style.borderRadius = '10px';
-
-      thumbWrap.innerHTML = '';
-      thumbWrap.appendChild(iframe);
-      thumbWrap.onclick = null;
-    }
-  </script>
 {% endblock %}
