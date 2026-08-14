@@ -128,18 +128,15 @@ def logout():
 # ============================================================================
 @app.route("/")
 def index():
-    return render_template("index.html", query=None, data=None)
-
+    return render_template("index.html")
 
 @app.route("/search")
 def search():
     query = request.args.get("q", "").strip()
-    if not query:
-        return redirect(url_for("index"))
-
-    data = search_service.search_youtube(query)
-    return render_template("index.html", query=query, data=data)
-
+    data = None
+    if query:
+        data = search_service.search_youtube(query)
+    return render_template("search.html", query=query, data=data)
 
 
 @app.route("/privacy-policy")
