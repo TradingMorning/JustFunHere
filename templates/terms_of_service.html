@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Terms of Service — {{ config.APP_NAME }}{% endblock %}
+{% block content %}
+<div class="legal-page">
+  <h1>Terms of Service</h1>
+  <p class="meta">Last updated: {{ config.LEGAL_LAST_UPDATED }}</p>
+
+  <p>
+    These Terms of Service ("Terms") govern your use of {{ config.APP_NAME }}
+    (the "Service"), operated at
+    <a href="https://falconspido.com">https://falconspido.com</a>. By creating
+    an account or connecting a platform, you agree to these Terms.
+  </p>
+
+  <h2>1. What the Service Does</h2>
+  <p>
+    {{ config.APP_NAME }} lets you connect your own social media accounts
+    (YouTube, Facebook, Instagram, X/Twitter, TikTok, Telegram) using each
+    platform's official OAuth login, upload video content you own or have
+    rights to, and schedule or publish that content to the accounts you
+    connect. {{ config.APP_NAME }} acts strictly as a tool operated by you,
+    on your explicit instruction — it does not create, own, or claim any
+    content you upload.
+  </p>
+
+  <h2>2. Eligibility</h2>
+  <ul>
+    <li>You must be at least 18 years old, or the age of majority in your
+      jurisdiction, to create an account.</li>
+    <li>You must have the legal right to connect each social media account
+      you connect — i.e. it must be your own account, or one you are
+      authorized to manage (e.g. a Facebook Page/Instagram Business account
+      you administer for a business).</li>
+    <li>You must comply with the terms of service of every platform you
+      connect (YouTube/Google, Meta, X, TikTok, Telegram) in addition to
+      these Terms.</li>
+  </ul>
+
+  <h2>3. Your Account</h2>
+  <ul>
+    <li>You are responsible for keeping your login credentials secure.</li>
+    <li>You are responsible for all activity that happens under your account,
+      including content scheduled or published through connected platforms.</li>
+    <li>You may disconnect any connected platform, or delete your account
+      entirely, at any time.</li>
+  </ul>
+
+  <h2>4. Acceptable Use</h2>
+  <p>You agree not to use {{ config.APP_NAME }} to:</p>
+  <ul>
+    <li>Upload, schedule, or publish content that infringes someone else's
+      copyright, trademark, or other intellectual property rights.</li>
+    <li>Upload, schedule, or publish content that is illegal, defamatory,
+      harassing, hateful, sexually explicit, or that violates the community
+      guidelines of the platform you're posting to.</li>
+    <li>Connect an account you do not own or are not authorized to manage.</li>
+    <li>Attempt to circumvent, scrape, or abuse any connected platform's API
+      beyond the scopes/permissions you were granted.</li>
+    <li>Use the Service to spam, or to publish misleading or fraudulent content.</li>
+    <li>Attempt to reverse-engineer, disrupt, or overload the Service's
+      infrastructure.</li>
+  </ul>
+  <p>
+    We reserve the right to suspend or terminate accounts that violate this
+    section, with or without notice, especially where required to comply
+    with a connected platform's own enforcement action.
+  </p>
+
+  <h2>5. Content Ownership</h2>
+  <p>
+    You retain full ownership of any content you upload. By using the
+    Service to publish content to a connected platform, you grant
+    {{ config.APP_NAME }} only the limited, temporary right to store, process,
+    and transmit that content to the platform(s) and account(s) you select —
+    solely for the purpose of carrying out your instructions. We claim no
+    ownership over your content and do not use it for any purpose other than
+    fulfilling your publish/schedule request.
+  </p>
+
+  <h2>6. Third-Party Platforms</h2>
+  <p>
+    {{ config.APP_NAME }} connects to YouTube, Facebook, Instagram, X,
+    TikTok, and Telegram through their official, public APIs. We are not
+    affiliated with, endorsed by, or sponsored by any of these platforms.
+    Each platform's own terms of service, community guidelines, and API
+    usage policies apply independently, and continue to apply to content
+    published through our Service. If a connected platform changes,
+    restricts, or revokes API access, some or all functionality for that
+    platform may stop working, and we are not liable for such changes.
+  </p>
+
+  <h2>7. Service Availability</h2>
+  <p>
+    We aim to keep the Service available and reliable, but we do not
+    guarantee uninterrupted access. Scheduled maintenance, third-party
+    platform outages, or API changes outside our control may affect
+    availability.
+  </p>
+
+  <h2>8. Disclaimers</h2>
+  <p>
+    The Service is provided "as is" and "as available," without warranties
+    of any kind, express or implied. We do not guarantee that content
+    scheduled through the Service will publish successfully in every case
+    (e.g. due to a connected platform's own rate limits, policy rejections,
+    or outages) — the Service will record and show you the actual result of
+    each attempt.
+  </p>
+
+  <h2>9. Limitation of Liability</h2>
+  <p>
+    To the maximum extent permitted by law, {{ config.APP_NAME }} and its
+    operators are not liable for any indirect, incidental, or consequential
+    damages arising from your use of the Service, including lost content,
+    lost revenue, or account actions taken by a connected platform (such as
+    suspension or content removal) as a result of content you chose to
+    publish.
+  </p>
+
+  <h2>10. Termination</h2>
+  <p>
+    You may stop using the Service and delete your account at any time. We
+    may suspend or terminate your access if you violate these Terms, misuse
+    connected platform APIs, or if required by a connected platform's own
+    policies.
+  </p>
+
+  <h2>11. Changes to These Terms</h2>
+  <p>
+    We may update these Terms from time to time. Material changes will be
+    reflected by updating the "Last updated" date above.
+  </p>
+
+  <h2>12. Governing Law</h2>
+  <p>
+    These Terms are governed by the laws of India, without regard to
+    conflict-of-law principles.
+  </p>
+
+  <h2>13. Contact Us</h2>
+  <p>
+    Questions about these Terms can be sent to
+    <a href="mailto:{{ config.SUPPORT_EMAIL }}">{{ config.SUPPORT_EMAIL }}</a>.
+  </p>
+</div>
+{% endblock %}
