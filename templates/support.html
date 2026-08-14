@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Support — {{ config.APP_NAME }}{% endblock %}
+{% block content %}
+<div class="legal-page">
+  <h1>Support</h1>
+
+  <p>
+    Need help with your account, a connected platform, or a scheduled post
+    that didn't go through? Reach us here:
+  </p>
+
+  <p>
+    <strong>Email:</strong>
+    <a href="mailto:{{ config.SUPPORT_EMAIL }}">{{ config.SUPPORT_EMAIL }}</a>
+    — we aim to respond within 2 business days.
+  </p>
+
+  <h2>Common issues</h2>
+
+  <h3>A connected account shows "expired" or stopped posting</h3>
+  <p>
+    Access tokens issued by YouTube, Facebook, Instagram, X, and TikTok
+    expire periodically and are refreshed automatically in the background.
+    If a platform still shows as disconnected after 24 hours, go to
+    <strong>Connect Accounts</strong> and reconnect it — this refreshes your
+    permission with that platform directly.
+  </p>
+
+  <h3>A scheduled post failed</h3>
+  <p>
+    Check the <strong>Dashboard</strong> — every attempt is logged with
+    either a link to the live post or the exact reason it failed (e.g. a
+    platform-side content policy rejection, a missing permission, or a
+    temporary API outage on that platform's end).
+  </p>
+
+  <h3>I want to disconnect a platform or delete my account</h3>
+  <p>
+    See our <a href="{{ url_for('data_deletion') }}">Data Deletion
+    Instructions</a> page for step-by-step options.
+  </p>
+
+  <h3>I have a question about how my data is used</h3>
+  <p>
+    See our <a href="{{ url_for('privacy_policy') }}">Privacy Policy</a>, or
+    email us directly.
+  </p>
+</div>
+{% endblock %}
