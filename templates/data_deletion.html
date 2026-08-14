@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Data Deletion Instructions — {{ config.APP_NAME }}{% endblock %}
+{% block content %}
+<div class="legal-page">
+  <h1>Data Deletion Instructions</h1>
+  <p class="meta">Last updated: {{ config.LEGAL_LAST_UPDATED }}</p>
+
+  <p>
+    You can request deletion of your {{ config.APP_NAME }} account and all
+    associated data at any time, using any of the methods below.
+  </p>
+
+  <h2>Option 1 — Delete from within the app</h2>
+  <ol>
+    <li>Log in to {{ config.APP_NAME }} at
+      <a href="https://falconspido.com/login">falconspido.com/login</a>.</li>
+    <li>Go to your <strong>Dashboard</strong>.</li>
+    <li>Under Account Settings, click <strong>"Delete My Account"</strong>.</li>
+    <li>Confirm the deletion when prompted.</li>
+  </ol>
+  <p>
+    This immediately disconnects every platform linked to your account,
+    permanently deletes your stored OAuth tokens, and removes your account
+    record. Uploaded video files and post history are permanently deleted
+    within 30 days.
+  </p>
+
+  <h2>Option 2 — Disconnect a single platform only</h2>
+  <p>
+    If you only want to remove access for one platform (e.g. just Facebook,
+    not your whole account), go to <strong>Connect Accounts</strong> in
+    {{ config.APP_NAME }} and click <strong>"Disconnect"</strong> next to
+    that platform. This deletes that platform's stored token immediately.
+  </p>
+
+  <h2>Option 3 — Revoke access directly from the platform</h2>
+  <p>
+    You can also revoke {{ config.APP_NAME }}'s access directly from any
+    connected platform's own security settings — this works even if you
+    can't log in to {{ config.APP_NAME }}:
+  </p>
+  <ul>
+    <li><strong>Google/YouTube:</strong>
+      <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">myaccount.google.com/permissions</a>
+      → find {{ config.APP_NAME }} → Remove Access.</li>
+    <li><strong>Facebook/Instagram:</strong>
+      <a href="https://www.facebook.com/settings?tab=business_tools" target="_blank" rel="noopener">Facebook Settings → Business Integrations</a>
+      → find {{ config.APP_NAME }} → Remove.</li>
+    <li><strong>X (Twitter):</strong>
+      <a href="https://twitter.com/settings/connected_apps" target="_blank" rel="noopener">twitter.com/settings/connected_apps</a>
+      → find {{ config.APP_NAME }} → Revoke access.</li>
+    <li><strong>TikTok:</strong> TikTok app → Settings and Privacy →
+      Security → Manage app permissions → find {{ config.APP_NAME }} →
+      Remove.</li>
+    <li><strong>Telegram:</strong> message
+      <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>
+      or simply stop using the login widget — no persistent token is stored
+      for Telegram beyond your login session.</li>
+  </ul>
+  <p>
+    Revoking access this way stops {{ config.APP_NAME }} from being able to
+    act on that account, but does not by itself delete your
+    {{ config.APP_NAME }} account record — use Option 1 or Option 2 above for
+    that, or email us (below) and we'll do it for you.
+  </p>
+
+  <h2>Option 4 — Email us</h2>
+  <p>
+    Email <a href="mailto:{{ config.SUPPORT_EMAIL }}">{{ config.SUPPORT_EMAIL }}</a>
+    from the email address associated with your account, with the subject
+    line "Delete my account." We will confirm your identity and delete your
+    account and all associated data within 30 days, and reply to confirm
+    once it's done.
+  </p>
+
+  <h2>What gets deleted</h2>
+  <ul>
+    <li>Your account record (email, login credentials).</li>
+    <li>All encrypted OAuth tokens for every connected platform.</li>
+    <li>Uploaded video files and thumbnails from our storage.</li>
+    <li>Your post/schedule history.</li>
+  </ul>
+  <p>
+    Note: deleting your {{ config.APP_NAME }} account does not delete
+    content that was already published to a connected platform (e.g. a video
+    already live on YouTube) — that content lives on the platform itself and
+    must be removed there directly, using that platform's own tools.
+  </p>
+</div>
+{% endblock %}
