@@ -2,6 +2,55 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <title>{% block title %}{{ config.APP_NAME }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="navbar">
+    <a href="{{ url_for('index') }}" class="brand">{{ config.APP_NAME }}</a>
+    <a href="{{ url_for('index') }}">Search</a>
+    <a href="{{ url_for('connect') }}">Connect Accounts</a>
+    <a href="{{ url_for('dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('review') }}">Review Studio</a>
+    <a href="/creator-tracker/">Creator</a>
+
+    {% if session.get('user_email') %}
+      <a href="{{ url_for('logout') }}">Log out</a>
+    {% else %}
+      <a href="{{ url_for('login') }}" style="margin-left:auto;">Log in</a>
+    {% endif %}
+  </nav>
+  <main class="container">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash">{% for m in messages %}<p>{{ m }}</p>{% endfor %}</div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <span>&copy; {{ config.LEGAL_LAST_UPDATED[-4:] }} {{ config.APP_NAME }}</span>
+    <a href="{{ url_for('privacy_policy') }}">Privacy Policy</a>
+    <a href="{{ url_for('terms_of_service') }}">Terms of Service</a>
+    <a href="{{ url_for('data_deletion') }}">Data Deletion</a>
+    <a href="{{ url_for('support') }}">Support</a>
+  </footer>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
   <title>{% block title %}Platform Hub{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -31,4 +80,4 @@
     {% block content %}{% endblock %}
   </main>
 </body>
-</html>
+</html> -->
