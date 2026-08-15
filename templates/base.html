@@ -2,7 +2,60 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>{% block title %}{{ config.APP_NAME }}{% endblock %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>{% block title %}{{ config.APP_NAME }} — Post everywhere, from one place{% endblock %}</title>
+
+  <!-- Description: shown in Google search results AND is one of the first
+       things a Google/Meta reviewer reads to understand what this app does.
+       Override per-page with {% block meta_description %}...{% endblock %} -->
+  <meta name="description" content="{% block meta_description %}{{ config.APP_NAME }} connects your YouTube, Facebook, Instagram, X, TikTok, and Telegram accounts so you can upload, schedule, and publish your own video content everywhere from one dashboard.{% endblock %}">
+
+  <!-- Open Graph — used by Facebook/Meta's own crawler when previewing this
+       URL during App Review, and by anyone sharing the link -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.APP_NAME }}">
+  <meta property="og:title" content="{% block og_title %}{{ config.APP_NAME }} — Post everywhere, from one place{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}Connect your YouTube, Facebook, Instagram, X, TikTok, and Telegram accounts and publish your own video content everywhere from one dashboard.{% endblock %}">
+  <meta property="og:url" content="{{ request.url }}">
+  <meta property="og:image" content="{{ url_for('static', filename='og-image.png', _external=True) }}">
+
+  <!-- Twitter/X card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ config.APP_NAME }} — Post everywhere, from one place">
+  <meta name="twitter:description" content="Connect your accounts and publish video content across six platforms from one dashboard.">
+  <meta name="twitter:image" content="{{ url_for('static', filename='og-image.png', _external=True) }}">
+
+  <!-- Canonical URL — avoids duplicate-content confusion between http/https or www/non-www -->
+  <link rel="canonical" href="{{ request.url_root.rstrip('/') }}{{ request.path }}">
+
+  <!-- Favicon — replace these files in static/ with your real icons -->
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+  <meta name="theme-color" content="#2563eb">
+
+  <!-- ================================================================
+       GOOGLE SITE VERIFICATION — REQUIRED for Google OAuth consent
+       screen domain verification. Go to https://search.google.com/search-console,
+       add falconspido.com as a property, choose "HTML tag" verification
+       method, and paste the "content" value Google gives you below.
+       ================================================================ -->
+  <meta name="google-site-verification" content="PASTE_YOUR_GOOGLE_VERIFICATION_CODE_HERE">
+
+  <!-- Structured data — helps Google (and reviewers scanning source) grasp
+       what this tool is at a glance -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "{{ config.APP_NAME }}",
+    "url": "{{ request.url_root }}",
+    "description": "Connects YouTube, Facebook, Instagram, X, TikTok, and Telegram accounts so creators can upload, schedule, and publish their own video content everywhere from one dashboard.",
+    "applicationCategory": "SocialNetworkingApplication",
+    "operatingSystem": "Web"
+  }
+  </script>
+
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -14,13 +67,13 @@
     <a href="{{ url_for('dashboard') }}">Dashboard</a>
     <a href="{{ url_for('review') }}">Review Studio</a>
     <a href="/creator-tracker/">Creator</a>
-
     {% if session.get('user_email') %}
       <a href="{{ url_for('logout') }}">Log out</a>
     {% else %}
       <a href="{{ url_for('login') }}" style="margin-left:auto;">Log in</a>
     {% endif %}
   </nav>
+
   <main class="container">
     {% with messages = get_flashed_messages() %}
       {% if messages %}
@@ -31,7 +84,7 @@
   </main>
 
   <footer class="site-footer">
-    <span>&copy; {{ config.LEGAL_LAST_UPDATED[-4:] }} {{ config.APP_NAME }}</span>
+    <span>&copy; {{ config.LEGAL_LAST_UPDATED[-4:] }} {{ config.APP_NAME }} — Post everywhere, from one place.</span>
     <a href="{{ url_for('privacy_policy') }}">Privacy Policy</a>
     <a href="{{ url_for('terms_of_service') }}">Terms of Service</a>
     <a href="{{ url_for('data_deletion') }}">Data Deletion</a>
@@ -39,11 +92,3 @@
   </footer>
 </body>
 </html>
-
-
-
-
-
-
-
-
