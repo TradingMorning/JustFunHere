@@ -45,17 +45,25 @@
 <body>
   <nav class="navbar">
     <a href="{{ url_for('index') }}" class="brand">{{ config.APP_NAME }}</a>
-    <a href="{{ url_for('index') }}">Home</a>
-    <a href="{{ url_for('search') }}">Search</a>
-    <a href="{{ url_for('connect') }}">Connect Accounts</a>
-    <a href="{{ url_for('dashboard') }}">Dashboard</a>
-    <a href="{{ url_for('review') }}">Review Studio</a>
-    <a href="/creator-tracker/">Creator</a>
-    {% if session.get('user_email') %}
-      <a href="{{ url_for('logout') }}">Log out</a>
-    {% else %}
-      <a href="{{ url_for('login') }}" style="margin-left:auto;">Log in</a>
-    {% endif %}
+
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
+    <label for="nav-toggle" class="nav-toggle-label" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </label>
+
+    <div class="nav-links">
+      <a href="{{ url_for('index') }}">Home</a>
+      <a href="{{ url_for('search') }}">Search</a>
+      <a href="{{ url_for('connect') }}">Connect Accounts</a>
+      <a href="{{ url_for('dashboard') }}">Dashboard</a>
+      <a href="{{ url_for('review') }}">Review Studio</a>
+      <a href="/creator-tracker/">Creator</a>
+      {% if session.get('user_email') %}
+        <a href="{{ url_for('logout') }}">Log out</a>
+      {% else %}
+        <a href="{{ url_for('login') }}">Log in</a>
+      {% endif %}
+    </div>
   </nav>
 
   <main class="container">
