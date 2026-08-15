@@ -2,17 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1"> 
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <title>{% block title %}{{ config.APP_NAME }} — Post everywhere, from one place{% endblock %}</title>
 
-  <!-- Description: shown in Google search results AND is one of the first
-       things a Google/Meta reviewer reads to understand what this app does.
-       Override per-page with {% block meta_description %}...{% endblock %} -->
   <meta name="description" content="{% block meta_description %}{{ config.APP_NAME }} connects your YouTube, Facebook, Instagram, X, TikTok, and Telegram accounts so you can upload, schedule, and publish your own video content everywhere from one dashboard.{% endblock %}">
 
-  <!-- Open Graph — used by Facebook/Meta's own crawler when previewing this
-       URL during App Review, and by anyone sharing the link -->
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="{{ config.APP_NAME }}">
   <meta property="og:title" content="{% block og_title %}{{ config.APP_NAME }} — Post everywhere, from one place{% endblock %}">
@@ -20,30 +15,19 @@
   <meta property="og:url" content="{{ request.url }}">
   <meta property="og:image" content="{{ url_for('static', filename='og-image.png', _external=True) }}">
 
-  <!-- Twitter/X card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{{ config.APP_NAME }} — Post everywhere, from one place">
   <meta name="twitter:description" content="Connect your accounts and publish video content across six platforms from one dashboard.">
   <meta name="twitter:image" content="{{ url_for('static', filename='og-image.png', _external=True) }}">
 
-  <!-- Canonical URL — avoids duplicate-content confusion between http/https or www/non-www -->
   <link rel="canonical" href="{{ request.url_root.rstrip('/') }}{{ request.path }}">
 
-  <!-- Favicon — replace these files in static/ with your real icons -->
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
   <meta name="theme-color" content="#2563eb">
 
-  <!-- ================================================================
-       GOOGLE SITE VERIFICATION — REQUIRED for Google OAuth consent
-       screen domain verification. Go to https://search.google.com/search-console,
-       add falconspido.com as a property, choose "HTML tag" verification
-       method, and paste the "content" value Google gives you below.
-       ================================================================ -->
   <meta name="google-site-verification" content="PASTE_YOUR_GOOGLE_VERIFICATION_CODE_HERE">
 
-  <!-- Structured data — helps Google (and reviewers scanning source) grasp
-       what this tool is at a glance -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
