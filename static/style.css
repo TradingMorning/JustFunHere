@@ -147,3 +147,64 @@ body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; back
   .search-form { flex-direction: column; }
   .site-footer { flex-direction: column; }
 }
+
+
+/* --- Mobile hamburger nav --- */
+.nav-toggle { display: none; }
+.nav-toggle-label {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 26px;
+  height: 20px;
+  cursor: pointer;
+  margin-left: auto;
+}
+.nav-toggle-label span {
+  display: block;
+  height: 3px;
+  width: 100%;
+  background: #333;
+  border-radius: 2px;
+}
+.nav-links {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .navbar {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+  }
+  .navbar .brand {
+    width: auto;
+    margin-bottom: 0;
+  }
+  .nav-toggle-label {
+    display: flex;
+  }
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    border-bottom: 1px solid #e5e5e5;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.08);
+  }
+  .nav-links a {
+    width: 100%;
+    padding: 14px 16px;
+    border-top: 1px solid #f0f0f0;
+  }
+  .nav-toggle:checked ~ .nav-links {
+    display: flex;
+  }
+}
