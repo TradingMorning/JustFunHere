@@ -52,8 +52,8 @@ app.jinja_env.globals['config'] = Config
 
 app.secret_key = Config.SECRET_KEY
 
-#from RenderDetectHome import init_render
-#init_render(app)
+from RenderDetectHome import init_render
+init_render(app)
 
 #from hook_detector2 import init_hooks
 #init_hooks(app)
