@@ -57,6 +57,7 @@
       <a href="{{ url_for('connect') }}">Connect Accounts</a>
       <a href="{{ url_for('dashboard') }}">Dashboard</a>
       <a href="{{ url_for('review') }}">Review Studio</a>
+          <a href="{{ url_for('render_bp.index') }}">Render</a>
       <a href="/creator-tracker/">Creator</a>
       {% if session.get('user_email') %}
         <a href="{{ url_for('logout') }}">Log out</a>
