@@ -65,9 +65,9 @@ _scheduler =start_scheduler()
 from creator_tracker import init_creator_tracker
 init_creator_tracker(app, scheduler=_scheduler)
 
-from downloader2 import downloader2_bp, init_downloader2
-init_downloader2(BASE, FFMPEG)
-app.register_blueprint(downloader2_bp)
+from downloader2 import init_downloader2
+init_downloader2(app)
+
 
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads_tmp")
