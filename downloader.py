@@ -266,17 +266,26 @@ def _inspect_cookies_health(cookie_path=None):
     has_yt = False
     has_ig = False
 
-    yt_key_tokens = ["__Secure-3PSID", "__Secure-1PSIDTS", "__Secure-3PSIDTS", "VISITOR_INFO1_LIVE", "LOGIN_INFO", "SID", "SSID", "APISID", "SAPISID"]
-    for tok in yt_key_tokens:
-        if tok in content:
-            tokens.append(tok)
-            has_yt = True
+    yt_core_tokens = ["SID", "HSID", "SSID", "__Secure-3PSID", "__Secure-1PSIDTS", "__Secure-3PSIDTS"]
+    yt_found = [t for t in yt_core_tokens if t in content]
+    has_full_yt = ("SID" in content or "HSID" in content) and ("__Secure-3PSID" in content)
+    has_partial_yt = len(yt_found) > 0
 
     if "csrftoken" in content or "ds_user_id" in content or "sessionid" in content:
         has_ig = True
         tokens.append("Instagram-Session")
 
-    status_str = f"🟢 Active ({_fmt_size(size)}) — YouTube Auth: {'✅ Yes' if has_yt else '⚠️ Partial/Public only'}"
+    tokens.extend(yt_found)
+
+    if has_full_yt:
+        status_str = f"🟢 Active ({_fmt_size(size)}) — YouTube Auth: ✅ Full (SID + 3PSID)"
+        rec_str = "Cookies fully configured with core session keys for datacenter servers."
+    elif has_partial_yt:
+        status_str = f"🟡 Partial ({_fmt_size(size)}) — YouTube Auth: ⚠️ Partial (Missing SID/HSID)"
+        rec_str = "cookies.txt is missing core 'SID' / 'HSID' login cookies. Export cookies from logged-in YouTube using 'Get cookies.txt LOCALLY' extension."
+    else:
+        status_str = f"🔴 Inactive ({_fmt_size(size)}) — YouTube Auth: ❌ No login tokens"
+        rec_str = "No valid YouTube session cookies found in file."
 
     return {
         "found": True,
@@ -284,12 +293,14 @@ def _inspect_cookies_health(cookie_path=None):
         "size": size,
         "size_str": _fmt_size(size),
         "is_netscape": is_netscape,
-        "has_youtube_auth": has_yt,
+        "has_youtube_auth": has_full_yt or has_partial_yt,
+        "has_full_youtube_auth": has_full_yt,
         "has_instagram_auth": has_ig,
         "tokens_found": tokens,
         "status_text": status_str,
-        "recommendation": "Cookies configured and loaded for server requests." if has_yt else "YouTube session cookies (__Secure-3PSID) missing; please re-export cookies."
+        "recommendation": rec_str
     }
+
 
 
 def _classify_error_detailed(e, mode, url):
@@ -596,6 +607,12 @@ def _base_ydl_opts():
         "quiet": True, "no_warnings": True, "noplaylist": True,
         "socket_timeout": 20, "retries": 3, "extractor_retries": 2,
         "geo_bypass": True,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Fetch-Mode": "navigate",
+        }
     }
     if FFMPEG_PATH:
         opts["ffmpeg_location"] = str(FFMPEG_PATH)
