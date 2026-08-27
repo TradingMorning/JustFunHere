@@ -72,10 +72,23 @@ DL_JOBS = {}
 _RESOLVED_MODE = {"mode": None}
 
 
-def init_downloader2(base_dir, ffmpeg_path=None):
-    """Call once at startup from app.py, e.g. init_downloader2(BASE, FFMPEG)."""
+def init_downloader2(base_dir=None, ffmpeg_path=None):
+    """Call once at startup from app.py, e.g. init_downloader2(app) or init_downloader2()."""
     global DL_DIR, FFMPEG_PATH, COOKIES_FILE, COOKIE_BROWSERS, OAUTH2_TOKEN_FILE
-    base_dir = Path(base_dir)
+    
+    # Handle passing Flask app directly: init_downloader2(app)
+    if hasattr(base_dir, "register_blueprint"):
+        flask_app = base_dir
+        base_dir = Path(__file__).resolve().parent
+        try:
+            flask_app.register_blueprint(downloader2_bp)
+        except Exception:
+            pass
+    elif base_dir is None:
+        base_dir = Path(__file__).resolve().parent
+    else:
+        base_dir = Path(base_dir)
+
     DL_DIR = base_dir / "downloads"
     DL_DIR.mkdir(exist_ok=True)
     FFMPEG_PATH = ffmpeg_path or DEFAULT_FFMPEG
