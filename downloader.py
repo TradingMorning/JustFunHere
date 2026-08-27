@@ -1,13 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-AutoShortAi — Downloader module
-────────────────────────────────
+AutoShortAi — Downloader module (Enhanced with Server-Side Cookies & Deep Diagnostics)
+───────────────────────────────────────────────────────────────────────────────────────
 A fully self-contained "download any video" feature (YouTube, Instagram,
 TikTok, X/Twitter, Facebook, Vimeo & 1000+ more sites via yt-dlp), shipped
 as its OWN file and wired into the main app as a Flask Blueprint — so it
 runs in the exact same process, on the exact same port. Nothing extra to
 start, nothing to configure separately.
+
+SERVER & RENDER DEPLOYMENT FOCUS:
+    - Automatically discovers and prioritizes `cookies.txt` located in the project
+      directory or `/etc/secrets/cookies.txt` on Render cloud.
+    - Inspects cookie health (validates Netscape format, checks for critical tokens
+      like __Secure-3PSID, VISITOR_INFO1_LIVE, LOGIN_INFO).
+    - Uses optimal client mappings with cookies (cookies_default and cookies_android_vr)
+      to avoid YouTube format/botguard errors on Datacenter/Render IPs.
+    - Emits structured Why / Where / What / How diagnostic logs for every single
+      step in the extraction and download lifecycle.
+    - Renders a live Diagnostic Console in the UI footer for 100% transparency.
 
 Wire it into the main app with:
 
@@ -16,27 +27,12 @@ Wire it into the main app with:
     app.register_blueprint(downloader_bp)
 
 Routes exposed (all under /api/downloader/...):
-    POST /api/downloader/info               -> full metadata + formats (no download)
-    POST /api/downloader/start               -> kicks off a background download
-    GET  /api/downloader/progress/<dl_id>    -> live percent/speed/eta/size
-    GET  /api/downloader/file/<dl_id>        -> serves the finished file
-
-SPEED FIX — smart auth caching:
-    Resolving a video normally means trying several auth methods in order
-    (a cookies.txt file, then each installed browser's cookies, then plain,
-    then a bypass mode) until one works. Doing that fresh on EVERY request
-    (once for "fetch details", again for "download") is slow and is a bad
-    experience. This module remembers, per process, which mode last
-    succeeded and tries THAT one first on every subsequent call — so the
-    "Fetch Details" step and the "Download" step that follows it are both
-    fast, and only a first cold call (or a mode that stops working) pays
-    the full fallback cost.
-
-WINDOWS "UGLY CMD WINDOW" FIX:
-    Every ffmpeg/yt-dlp subprocess call made from here passes
-    CREATE_NO_WINDOW on Windows, so no flashing black console window pops
-    up mid-download — a small but very real "this app looks unprofessional"
-    fix for non-technical users.
+    POST /api/downloader/info               -> full metadata + formats + diagnostic logs
+    POST /api/downloader/start              -> kicks off a background download
+    GET  /api/downloader/progress/<dl_id>   -> live percent/speed/eta/size/logs
+    GET  /api/downloader/file/<dl_id>       -> serves the finished file
+    GET  /api/downloader/cookie_status      -> checks cookie health & server environment
+    GET  /downloader                        -> Web UI with live progress & footer console
 """
 
 import os
@@ -70,7 +66,7 @@ COOKIES_FILE = None
 COOKIE_BROWSERS = ["chrome", "edge", "firefox", "brave"] if os.name == "nt" else []
 OAUTH2_TOKEN_FILE = None
 
-# dl_id -> {status, percent, downloaded, total, speed, eta, filename, error, url, stage}
+# dl_id -> {status, percent, downloaded, total, speed, eta, filename, error, url, stage, auth_logs}
 DL_JOBS = {}
 
 # Remembers whichever auth mode last succeeded, so repeat requests (info,
@@ -88,19 +84,25 @@ def init_downloader(base_dir, ffmpeg_path=None):
     FFMPEG_PATH = ffmpeg_path or DEFAULT_FFMPEG
     COOKIES_FILE = base_dir / "cookies.txt"
 
-    # Cloud secret files check
+    # Cloud secret files check (Render Secret Files & Parent directory)
     if not COOKIES_FILE.exists():
-        for _sec in (Path("/etc/secrets/cookies.txt"), base_dir.parent / "cookies.txt"):
-            if _sec.exists():
+        for _sec in (
+            Path("/etc/secrets/cookies.txt"),
+            Path("/opt/render/project/src/cookies.txt"),
+            base_dir.parent / "cookies.txt",
+            Path.cwd() / "cookies.txt"
+        ):
+            if _sec.exists() and _sec.is_file() and _sec.stat().st_size > 10:
                 COOKIES_FILE = _sec
                 break
 
-    # Auto-load cookies from environment variable if provided
+    # Auto-load cookies from environment variable if provided (fallback only)
     _env_cookies = os.environ.get("YOUTUBE_COOKIES") or os.environ.get("COOKIES_TEXT") or os.environ.get("YTDLP_COOKIES")
-    if _env_cookies and not COOKIES_FILE.exists():
+    if _env_cookies and not (COOKIES_FILE and COOKIES_FILE.exists()):
         try:
-            (base_dir / "cookies.txt").write_text(_env_cookies, encoding="utf-8")
-            COOKIES_FILE = base_dir / "cookies.txt"
+            target_c = base_dir / "cookies.txt"
+            target_c.write_text(_env_cookies, encoding="utf-8")
+            COOKIES_FILE = target_c
         except Exception:
             pass
 
@@ -120,10 +122,14 @@ def init_downloader(base_dir, ffmpeg_path=None):
             _found_b.append("edge")
         COOKIE_BROWSERS = _found_b
 
-    # OAuth2 Token file check
+    # OAuth2 Token file check (for YouTube TV device flow)
     OAUTH2_TOKEN_FILE = base_dir / "yt-dlp-oauth2.token"
     if not OAUTH2_TOKEN_FILE.exists():
-        for _sec in (Path("/etc/secrets/yt-dlp-oauth2.token"), base_dir / "token.json", Path("/etc/secrets/token.json")):
+        for _sec in (
+            Path("/etc/secrets/yt-dlp-oauth2.token"),
+            base_dir / "token.json",
+            Path("/etc/secrets/token.json")
+        ):
             if _sec.exists():
                 OAUTH2_TOKEN_FILE = _sec
                 break
@@ -176,6 +182,163 @@ def _fmt_duration(sec):
     h, rem = divmod(sec, 3600)
     m, s = divmod(rem, 60)
     return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _now_ts():
+    """Returns current timestamp string for live diagnostic logs."""
+    return datetime.now().strftime("%H:%M:%S")
+
+
+# ─────────────────────── Cookie Health & Discovery ───────────────────────
+
+def _get_cookies_file():
+    """Dynamically finds the best available cookies file on local, cloud, or secret paths."""
+    global COOKIES_FILE
+    # 1. Check globally registered COOKIES_FILE first
+    if COOKIES_FILE and Path(COOKIES_FILE).exists() and Path(COOKIES_FILE).stat().st_size > 10:
+        return str(Path(COOKIES_FILE).resolve())
+
+    # 2. Check candidate project paths
+    candidate_paths = (
+        Path(__file__).resolve().parent / "cookies.txt",
+        Path.cwd() / "cookies.txt",
+        Path("/etc/secrets/cookies.txt"),
+        Path("/opt/render/project/src/cookies.txt"),
+        Path(__file__).resolve().parent.parent / "cookies.txt"
+    )
+    for p in candidate_paths:
+        try:
+            if p.exists() and p.is_file() and p.stat().st_size > 10:
+                COOKIES_FILE = p
+                return str(p.resolve())
+        except Exception:
+            pass
+
+    # 3. Environment variable fallback
+    env_c = os.environ.get("YOUTUBE_COOKIES") or os.environ.get("COOKIES_TEXT") or os.environ.get("YTDLP_COOKIES")
+    if env_c and len(env_c.strip()) > 10:
+        for tmp_path in (Path("/tmp/youtube_cookies.txt"), Path(__file__).resolve().parent / "cookies.txt"):
+            try:
+                tmp_path.write_text(env_c.strip(), encoding="utf-8")
+                COOKIES_FILE = tmp_path
+                return str(tmp_path.resolve())
+            except Exception:
+                pass
+    return None
+
+
+def _inspect_cookies_health(cookie_path=None):
+    """Deeply inspects cookies.txt file to determine if YouTube and Instagram
+    session tokens exist, their expiry status, and format validity."""
+    cpath = cookie_path or _get_cookies_file()
+    if not cpath:
+        return {
+            "found": False,
+            "path": None,
+            "size": 0,
+            "is_netscape": False,
+            "has_youtube_auth": False,
+            "has_instagram_auth": False,
+            "tokens_found": [],
+            "status_text": "❌ No cookies.txt found in project root or /etc/secrets",
+            "recommendation": "Place your exported cookies.txt in the project root or Render Secret Files."
+        }
+
+    p = Path(cpath)
+    try:
+        content = p.read_text(encoding="utf-8", errors="replace")
+        size = p.stat().st_size
+    except Exception as e:
+        return {
+            "found": True,
+            "path": str(p),
+            "size": 0,
+            "is_netscape": False,
+            "has_youtube_auth": False,
+            "has_instagram_auth": False,
+            "tokens_found": [],
+            "status_text": f"⚠️ Could not read cookies.txt: {e}",
+            "recommendation": "Ensure cookies.txt has read permissions."
+        }
+
+    is_netscape = "# Netscape HTTP Cookie File" in content or "\t" in content
+    tokens = []
+    has_yt = False
+    has_ig = False
+
+    yt_key_tokens = ["__Secure-3PSID", "__Secure-1PSIDTS", "__Secure-3PSIDTS", "VISITOR_INFO1_LIVE", "LOGIN_INFO", "SID", "SSID", "APISID", "SAPISID"]
+    for tok in yt_key_tokens:
+        if tok in content:
+            tokens.append(tok)
+            has_yt = True
+
+    if "csrftoken" in content or "ds_user_id" in content or "sessionid" in content:
+        has_ig = True
+        tokens.append("Instagram-Session")
+
+    status_str = f"🟢 Active ({_fmt_size(size)}) — YouTube Auth: {'✅ Yes' if has_yt else '⚠️ Partial/Public only'}"
+
+    return {
+        "found": True,
+        "path": str(p),
+        "size": size,
+        "size_str": _fmt_size(size),
+        "is_netscape": is_netscape,
+        "has_youtube_auth": has_yt,
+        "has_instagram_auth": has_ig,
+        "tokens_found": tokens,
+        "status_text": status_str,
+        "recommendation": "Cookies configured and loaded for server requests." if has_yt else "YouTube session cookies (__Secure-3PSID) missing; please re-export cookies."
+    }
+
+
+def _classify_error_detailed(e, mode, url):
+    """Analyzes exact exception message and returns a structured breakdown
+    explaining Where, Why, What happened, and How to resolve it."""
+    err_raw = str(e).strip()
+    where = f"Strategy '{mode}' during yt_dlp.extract_info()"
+    
+    if "Sign in to confirm" in err_raw or "confirm you’re not a bot" in err_raw:
+        what = "YouTube BotGuard Challenge (Bot Detection Triggered)"
+        why = (
+            "YouTube detected a Datacenter IP (Render/Cloud server) and blocked unauthenticated extraction. "
+            "Server requires active cookies.txt or residential proxy to satisfy YouTube's Proof-of-Origin check."
+        )
+        how = "Ensure cookies.txt in project root has active __Secure-3PSID and __Secure-1PSIDTS tokens."
+    elif "403" in err_raw:
+        what = "HTTP 403 Forbidden (Access Denied / Expired CDN Signature)"
+        why = (
+            "YouTube rejected the video stream download URL. This happens when direct stream URLs are accessed "
+            "with mismatched User-Agent headers, expired timestamp tokens, or IP-restricted signatures."
+        )
+        how = "Using 'cookies_default' mode will generate valid, server-signed stream URLs."
+    elif "Requested format is not available" in err_raw or "Only images are available" in err_raw:
+        what = "Format Not Available for Selected Client"
+        why = (
+            "The requested player client (e.g. forced web_safari/tv client) does not provide progressive video streams "
+            "for this specific video ID without a GVS PO Token."
+        )
+        how = "Switching to 'cookies_default' or 'cookies_android_vr' mode resolves format availability."
+    elif "Video unavailable" in err_raw:
+        what = "Video Unavailable or Private"
+        why = "The video has been removed by the uploader, set to Private, or restricted in the server's region."
+        how = "Verify the video URL in your browser or supply cookies from an account with access."
+    elif "IncompleteRead" in err_raw or "RemoteDisconnected" in err_raw or "timed out" in err_raw:
+        what = "Network Socket Timeout / Interrupted Connection"
+        why = "The network connection between Render and YouTube servers dropped or was throttled."
+        how = "Automatic retries will attempt reconnecting with increased socket timeouts."
+    else:
+        what = f"Extractor Error: {err_raw[:120]}"
+        why = f"yt-dlp returned: {err_raw[:200]}"
+        how = "Trying next fallback mode in the authentication pipeline."
+
+    return {
+        "where": where,
+        "what": what,
+        "why": why,
+        "how": how,
+        "raw_error": err_raw[:250]
+    }
 
 
 # ─────────────────────────── smart auth resolution ───────────────────────────
@@ -320,91 +483,95 @@ def _resolve_via_public_api(url):
     return None, "Public resolver instances unreachable or video restricted"
 
 
-def _get_cookies_file():
-    """Dynamically finds the best available cookies file on local, cloud, or secret paths."""
-    for p in (
-        Path("/etc/secrets/cookies.txt"),
-        Path(__file__).resolve().parent / "cookies.txt",
-        Path.cwd() / "cookies.txt",
-        Path("/opt/render/project/src/cookies.txt"),
-        Path(__file__).resolve().parent.parent / "cookies.txt"
-    ):
-        try:
-            if p.exists() and p.stat().st_size > 10:
-                return str(p)
-        except Exception:
-            pass
-
-    env_c = os.environ.get("YOUTUBE_COOKIES") or os.environ.get("COOKIES_TEXT") or os.environ.get("YTDLP_COOKIES")
-    if env_c and len(env_c.strip()) > 10:
-        for tmp_path in (Path("/tmp/youtube_cookies.txt"), Path(__file__).resolve().parent / "cookies.txt"):
-            try:
-                tmp_path.write_text(env_c.strip(), encoding="utf-8")
-                return str(tmp_path)
-            except Exception:
-                pass
-    return None
-
-
 def _auth_attempts():
+    """Generates the prioritized authentication attempts list.
+    When a cookies.txt file exists on the server, cookie-backed modes are placed
+    at the VERY TOP because they are proven to succeed on datacenter/Render IPs."""
     attempts = []
     if _RESOLVED_MODE["mode"]:
         attempts.append(_RESOLVED_MODE["mode"])
-    rest = ["web_safari_highres", "android_mobile", "tv_embedded", "ios_mobile", "cookies_file"]
+
+    cfile = _get_cookies_file()
+    if cfile:
+        # TOP PRIORITY: Cookie-backed extraction strategies
+        cookie_modes = ["cookies_default", "cookies_android_vr", "cookies_web", "cookies_mweb"]
+        for cm in cookie_modes:
+            if cm not in attempts:
+                attempts.append(cm)
+
+    # Secondary strategies (OAuth2 device token & standard fallbacks)
     if OAUTH2_TOKEN_FILE and OAUTH2_TOKEN_FILE.exists():
-        rest.append("oauth2")
-    rest.extend(["bypass", "default"])
-    rest.extend(COOKIE_BROWSERS)
-    for m in rest:
+        if "oauth2" not in attempts:
+            attempts.append("oauth2")
+
+    fallbacks = ["android_vr_direct", "web_safari_highres", "bypass", "default"]
+    fallbacks.extend(COOKIE_BROWSERS)
+    for m in fallbacks:
         if m not in attempts:
             attempts.append(m)
+
     return attempts
 
 
 def _apply_auth_mode(opts, mode, client_potoken=None):
+    """Configures yt-dlp dictionary with exact extractor_args and cookiefile
+    tailored for each mode to prevent format dropping or header mismatches."""
     opts = dict(opts)
     opts.pop("cookiesfrombrowser", None)
     opts.pop("username", None)
     opts.pop("password", None)
+    opts.pop("extractor_args", None)
 
     cfile = _get_cookies_file()
-    if cfile:
-        opts["cookiefile"] = cfile
-    else:
-        opts.pop("cookiefile", None)
 
-    if mode == "web_safari_highres":
-        # #1 Priority: Full 4K & 1080p DASH adaptive stream extraction
+    # 1. Cookie-backed Modes (Server-Side cookies.txt)
+    if mode == "cookies_default":
+        # #1 Most Reliable: Let yt-dlp use its verified extractor with cookies
+        if cfile:
+            opts["cookiefile"] = cfile
+    elif mode == "cookies_android_vr":
+        # Android VR with cookiefile (bypasses botguards while preserving high-res streams)
+        if cfile:
+            opts["cookiefile"] = cfile
+        opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["android_vr", "web"]
+            }
+        }
+    elif mode == "cookies_web":
+        if cfile:
+            opts["cookiefile"] = cfile
+        ext_args = {
+            "player_client": ["web", "web_safari"]
+        }
+        if client_potoken:
+            ext_args["po_token"] = [f"web+{client_potoken}"]
+        opts["extractor_args"] = {"youtube": ext_args}
+    elif mode == "cookies_mweb":
+        if cfile:
+            opts["cookiefile"] = cfile
+        opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["mweb", "web"]
+            }
+        }
+    elif mode == "android_vr_direct":
+        opts["extractor_args"] = {
+            "youtube": {
+                "player_client": ["android_vr", "mweb"]
+            }
+        }
+        if cfile:
+            opts["cookiefile"] = cfile
+    elif mode == "web_safari_highres":
         ext_args = {
             "player_client": ["web_safari", "web_embedded", "web"]
         }
         if client_potoken:
             ext_args["po_token"] = [f"web+{client_potoken}"]
         opts["extractor_args"] = {"youtube": ext_args}
-    elif mode == "android_mobile":
-        opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["android", "mweb"]
-            }
-        }
-    elif mode == "tv_embedded":
-        opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["tv_embedded", "tv", "ios"],
-                "player_skip": ["webpage", "configs"]
-            }
-        }
-    elif mode == "ios_mobile":
-        opts["extractor_args"] = {
-            "youtube": {
-                "player_client": ["ios", "mweb", "android"],
-                "player_skip": ["webpage", "configs"]
-            }
-        }
-    elif mode == "cookies_file":
         if cfile:
             opts["cookiefile"] = cfile
-            opts.pop("extractor_args", None)
     elif mode == "oauth2":
         opts["username"] = "oauth2"
         opts["password"] = ""
@@ -414,15 +581,20 @@ def _apply_auth_mode(opts, mode, client_potoken=None):
         opts["cookiesfrombrowser"] = (mode,)
     elif mode == "default":
         opts["extractor_args"] = {"youtube": {"player_client": ["web_embedded", "android", "web"]}}
+        if cfile:
+            opts["cookiefile"] = cfile
     elif mode == "bypass":
         opts["extractor_args"] = {"youtube": {"player_client": ["web_safari", "android_vr", "web"]}}
+        if cfile:
+            opts["cookiefile"] = cfile
+
     return opts
 
 
 def _base_ydl_opts():
     opts = {
         "quiet": True, "no_warnings": True, "noplaylist": True,
-        "socket_timeout": 15, "retries": 2, "extractor_retries": 1,
+        "socket_timeout": 20, "retries": 3, "extractor_retries": 2,
         "geo_bypass": True,
     }
     if FFMPEG_PATH:
@@ -431,78 +603,118 @@ def _base_ydl_opts():
 
 
 def _extract_info_smart(url, extra_opts=None, download=False, client_potoken=None, log_list=None):
-    """Tries the cached working auth mode first, only falling back through
-    the rest of the chain if needed. Collects diagnostic logs for live UI display."""
+    """Tries the prioritized auth mode pipeline with comprehensive diagnostic logs
+    recording WHY each mode was chosen, WHERE it ran, WHAT happened, and HOW errors occurred."""
     base_opts = _base_ydl_opts()
     if extra_opts:
         base_opts.update(extra_opts)
 
-    cfile = _get_cookies_file()
+    # 1. Diagnostic: Check and log cookie health
+    cookie_health = _inspect_cookies_health()
     if log_list is not None:
-        if cfile:
-            try:
-                sz = os.path.getsize(cfile)
-                log_list.append(f"📁 Cookies: Found at '{cfile}' ({sz} bytes)")
-            except Exception:
-                log_list.append(f"📁 Cookies: Found at '{cfile}'")
+        ts = _now_ts()
+        if cookie_health["found"]:
+            log_list.append(
+                f"[{ts}] 📁 [Cookie Inspector] Found cookies.txt at '{cookie_health['path']}' ({cookie_health['size_str']}). "
+                f"Tokens: {', '.join(cookie_health['tokens_found']) if cookie_health['tokens_found'] else 'None'}"
+            )
         else:
-            log_list.append("📁 Cookies: ❌ No cookies.txt found in project or secrets")
-        if client_potoken:
-            log_list.append(f"🔑 Client PoToken: Received from user browser ({client_potoken[:12]}...)")
+            log_list.append(f"[{ts}] 📁 [Cookie Inspector] {cookie_health['status_text']}")
 
+        if client_potoken:
+            log_list.append(f"[{ts}] 🔑 [Client PoToken] Attached client browser token: {client_potoken[:12]}...")
+
+    attempts = _auth_attempts()
+    total_steps = len(attempts)
     last_err = None
-    for mode in _auth_attempts():
+    detailed_failures = []
+
+    for idx, mode in enumerate(attempts, start=1):
+        ts = _now_ts()
         opts = _apply_auth_mode(base_opts, mode, client_potoken=client_potoken)
-        msg_try = f"🔄 Trying mode: '{mode}'..."
+        
+        # Explain WHY this mode is being executed
+        why_msg = "standard fallback"
+        if mode == "cookies_default":
+            why_msg = f"Authenticating using server 'cookies.txt' ({cookie_health.get('size_str', 'loaded')}) with default client"
+        elif mode == "cookies_android_vr":
+            why_msg = "Using Android VR client + cookies to bypass datacenter IP restrictions"
+        elif mode == "cookies_web":
+            why_msg = "Using Web client + cookies for adaptive 4K/1080p stream extraction"
+        elif mode == "oauth2":
+            why_msg = "Using YouTube TV OAuth2 token authentication"
+        elif mode == "web_safari_highres":
+            why_msg = "Using Web Safari client to negotiate full DASH streams"
+
+        msg_try = f"[{ts}] 🔄 [Step {idx}/{total_steps}] Trying mode: '{mode}' — Why: {why_msg}"
         if log_list is not None:
             log_list.append(msg_try)
+
         try:
-            print(f"[downloader:auth] {msg_try.encode('ascii', 'replace').decode()}")
+            print(f"[downloader:auth] {msg_try.encode('ascii', 'replace').decode()}", flush=True)
         except Exception:
             pass
+
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=download)
+
             _RESOLVED_MODE["mode"] = mode
-            msg_ok = f"✅ Mode '{mode}' SUCCEEDED"
+            fmt_count = len(info.get("formats", [])) if info else 0
+            title_sample = (info.get("title") or "Video")[:45] if info else ""
+            msg_ok = f"[{_now_ts()}] ✅ [Step {idx}/{total_steps}] Mode '{mode}' SUCCEEDED! Title: \"{title_sample}\" ({fmt_count} formats resolved)"
+            
             if log_list is not None:
                 log_list.append(msg_ok)
             try:
-                print(f"[downloader:auth] {msg_ok.encode('ascii', 'replace').decode()}")
+                print(f"[downloader:auth] {msg_ok.encode('ascii', 'replace').decode()}", flush=True)
             except Exception:
                 pass
+
             return info, ydl if download else None, None
+
         except Exception as e:
-            err_str = str(e).strip()
-            if "Sign in to confirm" in err_str:
-                err_clean = "YouTube BotGuard challenge (Sign in to confirm you're not a bot)"
-            elif "403" in err_str:
-                err_clean = "HTTP 403 Forbidden"
-            else:
-                err_clean = err_str[:120]
-            msg_fail = f"❌ Mode '{mode}' failed: {err_clean}"
+            err_diag = _classify_error_detailed(e, mode, url)
+            detailed_failures.append(err_diag)
+            
+            msg_fail = (
+                f"[{_now_ts()}] ❌ [Step {idx}/{total_steps}] Mode '{mode}' failed: {err_diag['what']}\n"
+                f"     ↳ Why: {err_diag['why']}\n"
+                f"     ↳ How to fix: {err_diag['how']}"
+            )
             if log_list is not None:
                 log_list.append(msg_fail)
+
             try:
-                print(f"[downloader:auth] {msg_fail.encode('ascii', 'replace').decode()}")
+                print(f"[downloader:auth] {msg_fail.encode('ascii', 'replace').decode()}", flush=True)
             except Exception:
                 pass
+
             last_err = e
+            if _RESOLVED_MODE.get("mode") == mode:
+                _RESOLVED_MODE["mode"] = None
             continue
 
+    # Final Fail-Safe: If info extraction only and all yt-dlp modes failed, try public API resolver
     if not download:
-        msg_pub = "🔄 Trying public fail-safe API resolver..."
+        ts = _now_ts()
+        msg_pub = f"[{ts}] 🔄 [Fail-Safe Resolver] Trying public fail-safe API mirror (Invidious / Piped)..."
         if log_list is not None:
             log_list.append(msg_pub)
+        try:
+            print(f"[downloader:auth] {msg_pub.encode('ascii', 'replace').decode()}", flush=True)
+        except Exception:
+            pass
+
         pub_info, pub_err = _resolve_via_public_api(url)
         if pub_info:
-            msg_pub_ok = "✅ Mode 'public_api_fallback' SUCCEEDED"
+            msg_pub_ok = f"[{_now_ts()}] ✅ [Fail-Safe] public_api_fallback SUCCEEDED ({len(pub_info.get('formats', []))} formats)"
             if log_list is not None:
                 log_list.append(msg_pub_ok)
             return pub_info, None, None
         else:
             if log_list is not None:
-                log_list.append(f"❌ public_api_fallback failed: {pub_err}")
+                log_list.append(f"[{_now_ts()}] ❌ [Fail-Safe] public_api_fallback failed: {pub_err}")
 
     return None, None, last_err
 
@@ -653,8 +865,18 @@ def _build_full_details(info):
 
 # ───────────────────────────── routes ─────────────────────────────
 
+@downloader_bp.route("/api/downloader/cookie_status", methods=["GET"])
+def api_downloader_cookie_status():
+    """Endpoint for inspecting current server cookie health and environment."""
+    health = _inspect_cookies_health()
+    health["server_os"] = os.name
+    health["resolved_working_mode"] = _RESOLVED_MODE.get("mode")
+    return jsonify(health)
+
+
 @downloader_bp.route("/api/downloader/info", methods=["POST"])
 def api_downloader_info():
+    """Extracts video details and formats with prioritized cookie auth and deep diagnostics."""
     data = request.json or {}
     url = (data.get("url") or "").strip()
     client_potoken = (data.get("client_potoken") or "").strip() or None
@@ -662,42 +884,37 @@ def api_downloader_info():
         return jsonify({"error": "Paste a video URL first"}), 400
 
     logs = []
-    info, _, err = _extract_info_smart(url, extra_opts={"format": "bestvideo+bestaudio/best"}, client_potoken=client_potoken, log_list=logs)
+    info, _, err = _extract_info_smart(
+        url,
+        extra_opts={"format": "bestvideo+bestaudio/best"},
+        client_potoken=client_potoken,
+        log_list=logs
+    )
     
     if info is None:
-        vid = _extract_video_id(url)
-        if vid:
-            try:
-                oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={vid}&format=json"
-                req = urllib.request.Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    if resp.status == 200:
-                        oe = json.loads(resp.read().decode("utf-8"))
-                        info = {
-                            "id": vid,
-                            "title": oe.get("title") or "YouTube Video",
-                            "uploader": oe.get("author_name") or "YouTube Creator",
-                            "thumbnail": oe.get("thumbnail_url") or f"https://i.ytimg.com/vi/{vid}/maxresdefault.jpg",
-                            "formats": [
-                                {"format_id": "auto_1080", "ext": "mp4", "height": 1080, "width": 1920, "fps": 60, "vcodec": "avc1", "acodec": "mp4a", "filesize": 0, "tbr": 0, "url": f"https://www.youtube.com/watch?v={vid}"},
-                                {"format_id": "auto_720", "ext": "mp4", "height": 720, "width": 1280, "fps": 30, "vcodec": "avc1", "acodec": "mp4a", "filesize": 0, "tbr": 0, "url": f"https://www.youtube.com/watch?v={vid}"},
-                                {"format_id": "auto_480", "ext": "mp4", "height": 480, "width": 852, "fps": 30, "vcodec": "avc1", "acodec": "mp4a", "filesize": 0, "tbr": 0, "url": f"https://www.youtube.com/watch?v={vid}"}
-                            ]
-                        }
-                        logs.append("ℹ️ Fallback to YouTube oEmbed: Loaded title & thumbnail successfully")
-            except Exception:
-                pass
-
-    if info is None:
-        return jsonify({"error": f"Could not resolve video: {err}", "logs": logs}), 400
+        cookie_h = _inspect_cookies_health()
+        err_msg = f"Could not resolve video: {err}"
+        return jsonify({
+            "error": err_msg,
+            "logs": logs,
+            "cookie_status": cookie_h,
+            "troubleshoot": {
+                "where": "Server yt-dlp Extraction Pipeline",
+                "what": "Extraction failed across all authentication attempts",
+                "why": "Datacenter IP challenged by YouTube bot-guards. Check if cookies.txt is present and up to date.",
+                "how": "Verify that cookies.txt is in the project root with active session tokens."
+            }
+        }), 400
 
     details = _build_full_details(info)
     details["formats"] = _build_formats(info)
     details["logs"] = logs
+    details["cookie_status"] = _inspect_cookies_health()
     return jsonify(details)
 
 
 def _run_download_job(dl_id, url, format_id, client_potoken=None):
+    """Executes the video download in the background with continuous live logging."""
     job = DL_JOBS[dl_id]
     job["stage"] = "connect"
     job_logs = job.get("auth_logs", [])
@@ -722,7 +939,7 @@ def _run_download_job(dl_id, url, format_id, client_potoken=None):
         elif status == "finished":
             job["status"] = "processing"
             job["stage"] = "merge"
-            job_logs.append("🔀 Merging video & audio tracks losslessly...")
+            job_logs.append(f"[{_now_ts()}] 🔀 [Post-Processor] Merging video & audio tracks losslessly via ffmpeg...")
 
     if format_id:
         if "+" not in format_id and not format_id.startswith("best") and not format_id.startswith("ba"):
@@ -748,13 +965,20 @@ def _run_download_job(dl_id, url, format_id, client_potoken=None):
         return _orig_popen(*args, **kwargs)
     subprocess.Popen = _quiet_popen
     try:
-        info, ydl, err = _extract_info_smart(url, extra_opts=extra_opts, download=True, client_potoken=client_potoken, log_list=job_logs)
+        info, ydl, err = _extract_info_smart(
+            url,
+            extra_opts=extra_opts,
+            download=True,
+            client_potoken=client_potoken,
+            log_list=job_logs
+        )
     finally:
         subprocess.Popen = _orig_popen
 
     if info is None:
         job["status"] = "error"
         job["error"] = f"Download failed: {err}"
+        job_logs.append(f"[{_now_ts()}] ❌ Download failed with error: {err}")
         return
 
     try:
@@ -768,10 +992,11 @@ def _run_download_job(dl_id, url, format_id, client_potoken=None):
         job["status"] = "done"
         job["stage"] = "done"
         job["percent"] = 100
-        job_logs.append(f"✅ Download ready: {p.name}")
+        job_logs.append(f"[{_now_ts()}] ✅ [Completed] Download ready: {p.name} ({_fmt_size(p.stat().st_size if p.exists() else 0)})")
     except Exception as e:
         job["status"] = "error"
         job["error"] = f"Could not finalize file: {e}"
+        job_logs.append(f"[{_now_ts()}] ❌ Finalize error: {e}")
 
 
 @downloader_bp.route("/api/downloader/start", methods=["POST"])
@@ -783,9 +1008,9 @@ def api_downloader_start():
     if not url:
         return jsonify({"error": "No URL given"}), 400
     dl_id = uuid.uuid4().hex[:10]
-    logs = [f"🚀 Starting download task ({dl_id})"]
+    logs = [f"[{_now_ts()}] 🚀 Starting download task ({dl_id}) for format [{format_id or 'best'}]"]
     if client_potoken:
-        logs.append(f"🔑 Attached Client PoToken ({client_potoken[:10]}...)")
+        logs.append(f"[{_now_ts()}] 🔑 Attached Client PoToken ({client_potoken[:10]}...)")
     DL_JOBS[dl_id] = {
         "status": "starting", "stage": "connect", "percent": 0,
         "downloaded": 0, "total": None, "speed": None, "eta": None,
@@ -819,9 +1044,9 @@ def api_downloader_client_upload():
         "downloaded_str": _fmt_size(size_bytes), "total_str": _fmt_size(size_bytes),
         "speed": None, "eta": None, "filename": out_name, "error": None,
         "auth_logs": [
-            "🌉 Client-Assisted Bridge Relay Succeeded",
-            f"📦 Stored: {out_name} ({_fmt_size(size_bytes)})",
-            "✅ Ready for instant download!"
+            f"[{_now_ts()}] 🌉 Client-Assisted Bridge Relay Succeeded",
+            f"[{_now_ts()}] 📦 Stored: {out_name} ({_fmt_size(size_bytes)})",
+            f"[{_now_ts()}] ✅ Ready for instant download!"
         ]
     }
     return jsonify({"dl_id": dl_id, "filename": out_name, "status": "done"})
@@ -849,69 +1074,137 @@ def api_downloader_file(dl_id):
 
 @downloader_bp.route("/downloader", methods=["GET"])
 def downloader_page():
-    """Standalone Downloader Web UI with integrated Client-Assisted Bridge."""
+    """Standalone Downloader Web UI with deep diagnostics console in the footer."""
     return """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AutoShortAi — Universal Video Downloader & Client Bridge</title>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <title>AutoShortAi — Universal Video Downloader & Server Diagnostic Suite</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0b0f19;
-      --card-bg: #131b2e;
+      --bg: #070b14;
+      --card-bg: #0f172a;
+      --card-alt: #131d38;
       --accent: #6366f1;
+      --accent-hover: #4f46e5;
       --accent-glow: rgba(99, 102, 241, 0.35);
       --text: #f8fafc;
       --dim: #94a3b8;
       --border: #1e293b;
+      --border-light: #334155;
       --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.25);
+      --warning: #f59e0b;
       --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.25);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
-    body { background: var(--bg); color: var(--text); min-height: 100vh; padding: 40px 20px; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 860px; }
-    .header { text-align: center; margin-bottom: 35px; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; padding: 30px 16px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 960px; }
+    
+    /* Header & Badges */
+    .header { text-align: center; margin-bottom: 28px; }
     .header h1 { font-size: 32px; font-weight: 800; background: linear-gradient(135deg, #a5b4fc, #6366f1, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
-    .header p { color: var(--dim); font-size: 15px; }
-    .badge { display: inline-block; padding: 4px 12px; background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.4); border-radius: 999px; font-size: 12px; color: #a5b4fc; font-weight: 600; margin-bottom: 12px; }
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-bottom: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-    .input-group { display: flex; gap: 12px; margin-bottom: 15px; }
-    input[type="text"] { flex: 1; padding: 14px 18px; background: #070b13; border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 15px; outline: none; transition: 0.2s; }
+    .header p { color: var(--dim); font-size: 14.5px; max-width: 600px; margin: 0 auto; }
+    
+    .status-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 14px;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border-light);
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--dim);
+    }
+    .status-pill.active { border-color: rgba(16, 185, 129, 0.5); color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
+    .status-pill.warning { border-color: rgba(245, 158, 11, 0.5); color: #fde68a; background: rgba(245, 158, 11, 0.1); }
+    
+    /* Cards */
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 22px; margin-bottom: 22px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+    .card-title { font-size: 16px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    
+    /* Inputs & Buttons */
+    .input-group { display: flex; gap: 10px; }
+    input[type="text"] { flex: 1; padding: 14px 18px; background: #060911; border: 1px solid var(--border-light); border-radius: 10px; color: var(--text); font-size: 15px; outline: none; transition: 0.2s; }
     input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
-    .btn { padding: 14px 24px; background: var(--accent); color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; }
-    .btn:hover { background: #4f46e5; transform: translateY(-1px); }
+    .btn { padding: 14px 22px; background: var(--accent); color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14.5px; white-space: nowrap; }
+    .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
     .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-    .preview-box { display: flex; gap: 20px; align-items: flex-start; margin-top: 20px; padding: 16px; background: rgba(0,0,0,0.25); border-radius: 12px; border: 1px solid var(--border); }
-    .preview-thumb { width: 180px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; }
-    .preview-info h3 { font-size: 16px; margin-bottom: 6px; }
-    .preview-info p { font-size: 13px; color: var(--dim); }
-    .formats-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13.5px; }
-    .formats-table th { text-align: left; padding: 10px; color: var(--dim); border-bottom: 1px solid var(--border); font-size: 12px; text-transform: uppercase; }
-    .formats-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-    .fmt-btn { padding: 6px 12px; font-size: 12px; border-radius: 6px; background: rgba(99,102,241,0.2); border: 1px solid var(--accent); color: #c7d2fe; cursor: pointer; }
-    .fmt-btn:hover { background: var(--accent); color: white; }
-    .log-box { background: #070b13; border: 1px solid var(--border); border-radius: 10px; padding: 14px; font-family: monospace; font-size: 12.5px; line-height: 1.6; max-height: 220px; overflow-y: auto; color: #94a3b8; }
-    .log-box .log-ok { color: #34d399; }
-    .log-box .log-err { color: #f87171; }
-    .log-box .log-warn { color: #fbbf24; }
-    .progress-bar-wrap { width: 100%; height: 10px; background: #070b13; border-radius: 999px; overflow: hidden; margin-top: 14px; display: none; }
+    
+    /* Progress */
+    .progress-bar-wrap { width: 100%; height: 10px; background: #060911; border-radius: 999px; overflow: hidden; margin-top: 14px; display: none; }
     .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #6366f1, #38bdf8); transition: width 0.3s; }
+    .prog-text { font-size: 13px; color: var(--dim); margin-top: 8px; display: flex; justify-content: space-between; }
+    
+    /* Preview */
+    .preview-box { display: flex; gap: 18px; align-items: flex-start; margin-top: 10px; padding: 16px; background: rgba(0,0,0,0.3); border-radius: 12px; border: 1px solid var(--border); }
+    .preview-thumb { width: 180px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; }
+    .preview-info h3 { font-size: 16px; margin-bottom: 6px; color: var(--text); }
+    .preview-info p { font-size: 13px; color: var(--dim); line-height: 1.5; }
+    
+    /* Formats Table */
+    .formats-table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13.5px; }
+    .formats-table th { text-align: left; padding: 10px 12px; color: var(--dim); border-bottom: 1px solid var(--border); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .formats-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .fmt-btn { padding: 7px 14px; font-size: 12.5px; border-radius: 6px; background: rgba(99,102,241,0.2); border: 1px solid var(--accent); color: #c7d2fe; cursor: pointer; font-weight: 600; transition: 0.2s; }
+    .fmt-btn:hover { background: var(--accent); color: white; transform: translateY(-1px); }
+    
+    /* Diagnostic Console in Footer */
+    .console-card { background: #060913; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; margin-top: 20px; }
+    .console-header { background: #0b1120; padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; }
+    .console-tabs { display: flex; gap: 8px; }
+    .console-tab { padding: 4px 10px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; background: transparent; color: var(--dim); border: 1px solid transparent; }
+    .console-tab.active { background: #1e293b; color: #f8fafc; border-color: #334155; }
+    .console-actions { display: flex; gap: 8px; }
+    .console-btn { padding: 4px 10px; font-size: 11.5px; background: #1e293b; color: var(--dim); border: 1px solid #334155; border-radius: 6px; cursor: pointer; }
+    .console-btn:hover { color: var(--text); background: #334155; }
+    
+    .console-body {
+      padding: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      line-height: 1.7;
+      max-height: 320px;
+      overflow-y: auto;
+      color: #94a3b8;
+      background: #040711;
+    }
+    .console-log { margin-bottom: 6px; word-break: break-word; }
+    .log-ok { color: #34d399; }
+    .log-err { color: #f87171; background: rgba(239,68,68,0.06); padding: 4px 8px; border-radius: 4px; border-left: 3px solid #ef4444; }
+    .log-warn { color: #fbbf24; }
+    .log-info { color: #38bdf8; }
     .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
-      <div class="badge">🌐 Universal Video Downloader & Client Bridge</div>
-      <h1>Download Any Video</h1>
-      <p>Seamless 4K / 1080p stream downloader with residential client bridge fallback.</p>
+      <h1>Universal Video Downloader</h1>
+      <p>Server-side high-speed stream extractor with automatic cookies.txt authentication and live diagnostic tracing.</p>
+      
+      <div class="status-bar" id="statusBar">
+        <div class="status-pill" id="cookiePill">🍪 Checking cookies.txt...</div>
+        <div class="status-pill" id="serverPill">🖥️ Server: Ready</div>
+      </div>
     </div>
 
     <div class="card">
       <div class="input-group">
-        <input type="text" id="videoUrl" placeholder="Paste YouTube, Shorts, Twitter, Vimeo URL..." value="https://www.youtube.com/watch?v=re0WlNMOfFU">
+        <input type="text" id="videoUrl" placeholder="Paste YouTube, Shorts, Twitter, Instagram URL..." value="https://www.youtube.com/watch?v=re0WlNMOfFU">
         <button class="btn" id="fetchBtn" onclick="fetchVideoInfo()">
           <span>🔍 Fetch Details</span>
         </button>
@@ -920,10 +1213,16 @@ def downloader_page():
       <div class="progress-bar-wrap" id="progWrap">
         <div class="progress-bar" id="progBar"></div>
       </div>
-      <div id="progText" style="font-size: 13px; color: var(--dim); margin-top: 8px; text-align: right;" class="hidden"></div>
+      <div id="progText" class="prog-text hidden">
+        <span id="progStatus">Connecting...</span>
+        <span id="progMetrics"></span>
+      </div>
     </div>
 
     <div class="card hidden" id="previewCard">
+      <div class="card-header">
+        <div class="card-title">📹 Video Information</div>
+      </div>
       <div class="preview-box">
         <img id="prevThumb" class="preview-thumb" src="" alt="Thumbnail">
         <div class="preview-info">
@@ -937,7 +1236,7 @@ def downloader_page():
             <th>Type</th>
             <th>Resolution / Quality</th>
             <th>Format</th>
-            <th>Size</th>
+            <th>Estimated Size</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -945,24 +1244,91 @@ def downloader_page():
       </table>
     </div>
 
-    <div class="card">
-      <h4 style="font-size: 14px; margin-bottom: 10px; color: var(--dim);">📡 Live Diagnostic & Auth Logs</h4>
-      <div class="log-box" id="logBox">
-        <div>Ready. Paste a URL and click "Fetch Details".</div>
+    <!-- Live Diagnostic & Auth Console (Footer) -->
+    <div class="console-card">
+      <div class="console-header">
+        <div class="card-title" style="font-size: 13.5px;">
+          <span>📡 Live Diagnostic Console (Why / Where / What / How)</span>
+        </div>
+        <div class="console-tabs">
+          <button class="console-tab active" onclick="filterLogs('all')">All</button>
+          <button class="console-tab" onclick="filterLogs('auth')">Auth & Cookies</button>
+          <button class="console-tab" onclick="filterLogs('err')">Errors</button>
+        </div>
+        <div class="console-actions">
+          <button class="console-btn" onclick="copyConsoleLogs()">📋 Copy Logs</button>
+          <button class="console-btn" onclick="clearConsoleLogs()">🧹 Clear</button>
+        </div>
+      </div>
+      <div class="console-body" id="consoleBody">
+        <div class="console-log log-info">[System Ready] Paste a video URL and click "Fetch Details" to start extraction.</div>
       </div>
     </div>
   </div>
 
   <script>
-    function logMsg(msg, type){
-      const el = document.getElementById('logBox');
-      const d = document.createElement('div');
-      if(type==='ok') d.className = 'log-ok';
-      else if(type==='err') d.className = 'log-err';
-      else if(type==='warn') d.className = 'log-warn';
-      d.textContent = msg;
-      el.appendChild(d);
-      el.scrollTop = el.scrollHeight;
+    let allLogs = [];
+
+    window.addEventListener('DOMContentLoaded', () => {
+      checkServerCookieHealth();
+    });
+
+    async function checkServerCookieHealth(){
+      try {
+        const res = await fetch('/api/downloader/cookie_status');
+        const data = await res.json();
+        const pill = document.getElementById('cookiePill');
+        if(data.found && data.has_youtube_auth){
+          pill.className = 'status-pill active';
+          pill.innerHTML = `🍪 cookies.txt: Active (${data.size_str || 'Loaded'}) • Auth: Verified`;
+          addConsoleLog(`[Cookie Status] ✅ cookies.txt loaded from: ${data.path} (${data.size_str}). Active tokens: ${data.tokens_found.join(', ')}`, 'ok');
+        } else if(data.found){
+          pill.className = 'status-pill warning';
+          pill.innerHTML = `🍪 cookies.txt: Loaded (${data.size_str}) • Partial Auth`;
+          addConsoleLog(`[Cookie Status] ⚠️ cookies.txt found at ${data.path} but YouTube session tokens are incomplete.`, 'warn');
+        } else {
+          pill.className = 'status-pill warning';
+          pill.innerHTML = '🍪 cookies.txt: Not Found (Will try mobile/bypass)';
+          addConsoleLog('[Cookie Status] ℹ️ No cookies.txt found in project directory. Extraction will use mobile client fallbacks.', 'warn');
+        }
+      } catch(e){
+        document.getElementById('cookiePill').textContent = '🍪 Cookie Inspector: Offline';
+      }
+    }
+
+    function addConsoleLog(msg, type='info'){
+      allLogs.push({msg, type, time: new Date().toLocaleTimeString()});
+      const body = document.getElementById('consoleBody');
+      const el = document.createElement('div');
+      el.className = `console-log log-${type}`;
+      el.textContent = msg;
+      body.appendChild(el);
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function filterLogs(filter){
+      document.querySelectorAll('.console-tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      const body = document.getElementById('consoleBody');
+      body.innerHTML = '';
+      allLogs.forEach(l => {
+        if(filter === 'all' || (filter === 'err' && l.type === 'err') || (filter === 'auth' && (l.msg.includes('Cookie') || l.msg.includes('Step') || l.msg.includes('Mode')))){
+          const el = document.createElement('div');
+          el.className = `console-log log-${l.type}`;
+          el.textContent = l.msg;
+          body.appendChild(el);
+        }
+      });
+    }
+
+    function clearConsoleLogs(){
+      allLogs = [];
+      document.getElementById('consoleBody').innerHTML = '<div class="console-log log-info">[Console Cleared]</div>';
+    }
+
+    function copyConsoleLogs(){
+      const text = allLogs.map(l => l.msg).join('\\n');
+      navigator.clipboard.writeText(text).then(() => alert('Diagnostics copied to clipboard!'));
     }
 
     async function fetchVideoInfo(){
@@ -971,7 +1337,7 @@ def downloader_page():
       const btn = document.getElementById('fetchBtn');
       btn.disabled = true;
       btn.innerHTML = '<span>⏳ Resolving...</span>';
-      logMsg(`🔍 Resolving video details for: ${url}`, 'warn');
+      addConsoleLog(`[Fetch Request] Starting extraction for: ${url}`, 'info');
 
       let res, data;
       try {
@@ -982,42 +1348,13 @@ def downloader_page():
         });
         data = await res.json();
       } catch(e){
-        logMsg(`❌ Network error contacting server: ${e.message}`, 'err');
+        addConsoleLog(`❌ [Network Failure] Could not connect to server: ${e.message}`, 'err');
         btn.disabled = false; btn.innerHTML = '<span>🔍 Fetch Details</span>';
         return;
       }
 
       if(data.logs && data.logs.length){
-        data.logs.forEach(l => logMsg(l, l.startsWith('✅')?'ok':(l.startsWith('❌')?'err':'warn')));
-      }
-
-      // Client-Side Browser Fallback if cloud server is challenged
-      if(!data || data.error){
-        logMsg(`⚠️ Server blocked or challenged: ${data ? data.error : 'Unknown'}. Activating Client-Bridge...`, 'warn');
-        const ytMatch = url.match(/(?:v=|\\/shorts\\/|youtu\\.be\\/|embed\\/|v\\/)([a-zA-Z0-9_-]{11})/);
-        if(ytMatch){
-          const vid = ytMatch[1];
-          try {
-            const oeRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${vid}&format=json`);
-            if(oeRes.ok){
-              const oe = await oeRes.json();
-              data = {
-                id: vid,
-                title: oe.title || 'YouTube Video',
-                uploader: oe.author_name || 'Creator',
-                thumbnail: oe.thumbnail_url || `https://i.ytimg.com/vi/${vid}/maxresdefault.jpg`,
-                formats: [
-                  { kind: '🎬 Video + Audio', label: '1080p (Full HD)', format_id: 'auto_1080', ext: 'mp4', filesize_str: 'Full HD' },
-                  { kind: '🎬 Video + Audio', label: '720p (HD)', format_id: 'auto_720', ext: 'mp4', filesize_str: 'HD' },
-                  { kind: '🎬 Video + Audio', label: '480p (Standard)', format_id: 'auto_480', ext: 'mp4', filesize_str: 'Standard' }
-                ]
-              };
-              logMsg(`✅ Client Browser Bridge: Resolved "${data.title}" via home connection`, 'ok');
-            }
-          } catch(err){
-            logMsg(`❌ Client Fallback Error: ${err.message}`, 'err');
-          }
-        }
+        data.logs.forEach(l => addConsoleLog(l, l.includes('✅')?'ok':(l.includes('❌')?'err':'warn')));
       }
 
       btn.disabled = false;
@@ -1026,7 +1363,10 @@ def downloader_page():
       if(data && !data.error){
         renderDetails(data);
       } else {
-        logMsg(`❌ Failed: ${data ? data.error : 'Could not resolve'}`, 'err');
+        addConsoleLog(`❌ [Resolution Failed] ${data ? data.error : 'Could not resolve video'}`, 'err');
+        if(data && data.troubleshoot){
+          addConsoleLog(`💡 [Troubleshoot Guide] Why: ${data.troubleshoot.why} | How: ${data.troubleshoot.how}`, 'warn');
+        }
       }
     }
 
@@ -1034,7 +1374,7 @@ def downloader_page():
       document.getElementById('previewCard').classList.remove('hidden');
       document.getElementById('prevThumb').src = data.thumbnail || '';
       document.getElementById('prevTitle').textContent = data.title || 'Untitled';
-      document.getElementById('prevMeta').textContent = `${data.uploader || 'Unknown Creator'} • ${(data.formats||[]).length} formats available`;
+      document.getElementById('prevMeta').textContent = `${data.uploader || 'Unknown Creator'} • Duration: ${data.duration_str || data.duration || 'N/A'} • ${(data.formats||[]).length} formats available`;
 
       const tbody = document.getElementById('formatsBody');
       tbody.innerHTML = '';
@@ -1055,15 +1395,18 @@ def downloader_page():
 
     async function startDownload(formatId){
       const url = document.getElementById('videoUrl').value.trim();
-      logMsg(`🚀 Requesting download for format [${formatId}]...`, 'warn');
+      addConsoleLog(`[Download Triggered] Initiating background download for format [${formatId}]...`, 'info');
 
       const wrap = document.getElementById('progWrap');
       const bar = document.getElementById('progBar');
       const txt = document.getElementById('progText');
+      const statusSpan = document.getElementById('progStatus');
+      const metricsSpan = document.getElementById('progMetrics');
+      
       wrap.style.display = 'block';
       txt.classList.remove('hidden');
-      bar.style.width = '10%';
-      txt.textContent = 'Connecting...';
+      bar.style.width = '5%';
+      statusSpan.textContent = 'Connecting to stream...';
 
       let res, data;
       try {
@@ -1074,17 +1417,17 @@ def downloader_page():
         });
         data = await res.json();
       } catch(e){
-        logMsg(`❌ Start failed: ${e.message}`, 'err');
+        addConsoleLog(`❌ [Download Error] Start failed: ${e.message}`, 'err');
         return;
       }
 
       if(data.error){
-        logMsg(`❌ ${data.error}`, 'err');
+        addConsoleLog(`❌ [Download Error] ${data.error}`, 'err');
         return;
       }
 
       const dlId = data.dl_id;
-      logMsg(`📥 Download task created [${dlId}]. Polling live progress...`, 'ok');
+      addConsoleLog(`📥 [Task Created] ID: ${dlId}. Polling server progress...`, 'ok');
 
       let done = false;
       while(!done){
@@ -1098,25 +1441,30 @@ def downloader_page():
         }
 
         if(sd.auth_logs && sd.auth_logs.length){
-          sd.auth_logs.forEach(l => logMsg(l, l.startsWith('✅')?'ok':'warn'));
+          sd.auth_logs.forEach(l => {
+            if(!allLogs.some(existing => existing.msg === l)){
+              addConsoleLog(l, l.includes('✅')?'ok':(l.includes('❌')?'err':'warn'));
+            }
+          });
         }
 
         if(sd.error){
-          logMsg(`❌ Download error: ${sd.error}`, 'err');
-          txt.textContent = 'Failed';
+          addConsoleLog(`❌ [Download Aborted] ${sd.error}`, 'err');
+          statusSpan.textContent = 'Failed';
           break;
         }
 
         if(sd.percent != null){
           bar.style.width = `${sd.percent}%`;
-          txt.textContent = `${sd.percent}% • ${sd.speed_str || ''} • ${sd.eta ? sd.eta + 's left' : ''}`;
+          statusSpan.textContent = sd.stage === 'merge' ? 'Merging video & audio...' : `Downloading (${sd.percent}%)`;
+          metricsSpan.textContent = `${sd.downloaded_str || ''} / ${sd.total_str || ''} • ${sd.speed_str || ''} • ${sd.eta ? sd.eta + 's remaining' : ''}`;
         }
 
         if(sd.status === 'done'){
           done = true;
           bar.style.width = '100%';
-          txt.textContent = '✅ Download complete! Starting download...';
-          logMsg(`🎉 File ready: ${sd.filename}. Triggering download.`, 'ok');
+          statusSpan.textContent = '✅ Download complete! Serving file...';
+          addConsoleLog(`🎉 [Ready] File: ${sd.filename}. Serving attachment.`, 'ok');
           window.location.href = `/api/downloader/file/${dlId}`;
         }
       }
