@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-""" 
+"""
 AutoShortAi — Downloader2 Module with Dual Extraction Engine (Home Bridge + Server PO-Token)
 ──────────────────────────────────────────────────────────────────────────────────────────
 Features:
@@ -50,6 +50,11 @@ OAUTH2_TOKEN_FILE = None
 # dl_id -> {status, percent, downloaded, total, speed, eta, filename, error, url, stage, auth_logs}
 DL_JOBS = {}
 _RESOLVED_MODE = {"mode": None}
+
+
+def init_downloader(base_dir=None, ffmpeg_path=None):
+    """Call once at startup from app.py or RenderDetect.py."""
+    return init_downloader2(base_dir, ffmpeg_path)
 
 
 def init_downloader2(base_dir=None, ffmpeg_path=None):
